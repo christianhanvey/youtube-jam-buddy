@@ -102,12 +102,13 @@
     @media (max-width: 600px) {
       li.item { grid-template-columns: 1fr; }
     }
-    li.item iframe {
+    li.item .item-thumb {
       width: 100%;
       aspect-ratio: 16 / 9;
-      border: 0;
       border-radius: 4px;
       background: #000;
+      object-fit: cover;
+      display: block;
     }
     .item-meta {
       display: flex;
@@ -272,7 +273,15 @@
       cursor: pointer;
       font-size: 12px;
     }
-    .player-header button:hover {
+    .player-header button:hover:not(:disabled) {
+      color: var(--text);
+      border-color: var(--text);
+    }
+    .player-header button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    #stopJamBtn:hover:not(:disabled) {
       color: var(--error);
       border-color: var(--error);
     }
@@ -294,6 +303,8 @@
             Speed
             <select id="jamSpeedSelect"></select>
           </label>
+          <button type="button" id="jamPrevBtn" disabled>‹ Prev</button>
+          <button type="button" id="jamNextBtn" disabled>Next ›</button>
           <button type="button" id="stopJamBtn">Stop</button>
         </div>
       </div>
@@ -441,6 +452,8 @@
     const playerArea = document.getElementById("playerArea");
     const playerMount = document.getElementById("playerMount");
     const stopJamBtn = document.getElementById("stopJamBtn");
+    const jamPrevBtn = document.getElementById("jamPrevBtn");
+    const jamNextBtn = document.getElementById("jamNextBtn");
     const jamSpeedSelect = document.getElementById("jamSpeedSelect");
 
     for (const s of SPEEDS) {
@@ -466,17 +479,17 @@
       li.dataset.id = v.id;
       li.draggable = editingId !== v.id;
 
-      const iframe = document.createElement("iframe");
-      iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(v.videoId)}`;
-      iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-      iframe.allowFullscreen = true;
-      iframe.title = v.title;
+      const thumb = document.createElement("img");
+      thumb.className = "item-thumb";
+      thumb.src = `https://i.ytimg.com/vi/${encodeURIComponent(v.videoId)}/mqdefault.jpg`;
+      thumb.alt = v.title;
+      thumb.loading = "lazy";
 
       const meta = document.createElement("div");
       meta.className = "item-meta";
       meta.append(editingId === v.id ? renderEditForm(v) : renderViewMeta(v));
 
-      li.append(iframe, meta);
+      li.append(thumb, meta);
       attachDragHandlers(li, v);
       return li;
     }
@@ -749,12 +762,22 @@
       if (v.startSeconds != null) args.startSeconds = v.startSeconds;
       if (v.endSeconds != null) args.endSeconds = v.endSeconds;
       try { jamPlayer.loadVideoById(args); } catch (_) {}
+      updateNavButtons();
     }
 
     function advanceJam() {
       jamIndex += 1;
-      if (jamIndex >= jamQueue.length) return;
+      if (jamIndex >= jamQueue.length) {
+        updateNavButtons();
+        return;
+      }
       loadJamItem(jamIndex);
+    }
+
+    function updateNavButtons() {
+      const active = !!jamPlayer && jamQueue.length > 0;
+      jamPrevBtn.disabled = !active || jamIndex <= 0;
+      jamNextBtn.disabled = !active || jamIndex >= jamQueue.length - 1;
     }
 
     function currentJamVideo() {
@@ -787,10 +810,23 @@
       jamIndex = 0;
       playerMount.replaceChildren();
       playerArea.hidden = true;
+      updateNavButtons();
     }
 
     jamBtn.addEventListener("click", startJam);
     stopJamBtn.addEventListener("click", stopJam);
+
+    jamPrevBtn.addEventListener("click", () => {
+      if (!jamPlayer || jamIndex <= 0) return;
+      jamIndex -= 1;
+      loadJamItem(jamIndex);
+    });
+
+    jamNextBtn.addEventListener("click", () => {
+      if (!jamPlayer || jamIndex >= jamQueue.length - 1) return;
+      jamIndex += 1;
+      loadJamItem(jamIndex);
+    });
 
     jamSpeedSelect.addEventListener("change", () => {
       if (!jamPlayer) return;

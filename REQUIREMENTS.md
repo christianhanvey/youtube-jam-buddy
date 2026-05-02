@@ -55,7 +55,17 @@ When editing a playlist the user has access to re-order the you videos in the li
 When editing a video, the user has access to change the title, url, playback start, playback end and playback speed properties
 
 
-Sample youtube video urls to work with:
+### TEST DATA - SAFE TO IGNORE THE BELOW
+
+### Sample youtube video urls to work with:
 https://youtu.be/oDMldn7hFZo?si=_3Gl62JQf3EmsrTm
 https://youtu.be/SRVE_-th1EI?si=zBzyIuQ6JXLzlW03
 https://youtu.be/ydeV1_8pM4o?si=uViMOSxiVXordBAN
+https://youtu.be/ootXJmTJl_c?si=VWfXOV_CNMq420H0
+
+### Playlist data
+[{"id":"1777704339893-z9jmqv","videoId":"oDMldn7hFZo","url":"https://youtu.be/oDMldn7hFZo?si=_3Gl62JQf3EmsrTm","title":"The Dripping Tap - King Gizzard & The Lizard Wizard","addedAt":"2026-05-02T06:45:39.893Z","playbackRate":1},{"id":"1777705914649-jhmvw4","videoId":"ootXJmTJl_c","url":"https://youtu.be/ootXJmTJl_c?si=VWfXOV_CNMq420H0","title":"The Land Before Timeland - King Gizzard & The Lizard Wizard","addedAt":"2026-05-02T07:11:54.649Z","playbackRate":1},{"id":"1777704330768-f7mvij","videoId":"SRVE_-th1EI","url":"https://youtu.be/SRVE_-th1EI?si=zBzyIuQ6JXLzlW03","title":"Gaia - King Gizzard & The Lizard Wizard","addedAt":"2026-05-02T06:45:30.768Z","playbackRate":1,"startSeconds":31,"endSeconds":612},{"id":"1777704306211-isqd3y","videoId":"ydeV1_8pM4o","url":"https://youtu.be/ydeV1_8pM4o?si=uViMOSxiVXordBAN","title":"Ice V - King Gizzard & The Lizard Wizard","addedAt":"2026-05-02T06:45:06.211Z","playbackRate":1,"startSeconds":9,"endSeconds":null},{"id":"1777707611646-zhntqf","videoId":"Jb8UMmrBlC8","url":"https://youtu.be/Jb8UMmrBlC8?si=TQEWIocCCFZZm8S1","title":"King Gizzard & The Lizard Wizard - Full Performance (Live on KEXP)","addedAt":"2026-05-02T07:40:11.646Z"}]
+
+### Server
+To serve file use: 
+    python3 -m http.server 8080
