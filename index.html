@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Youtube Jam Buddy</title>
+  <style>
+    :root {
+      --bg: #15171c;
+      --panel: #1f232b;
+      --border: #2c313b;
+      --text: #e6e8ed;
+      --muted: #9aa3b2;
+      --accent: #4ea1ff;
+      --error: #ff6b6b;
+      --success: #58d18b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin: 0 0 24px;
+      font-size: 14px;
+    }
+    .add-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .add-form input {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .add-form input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .add-form button {
+      padding: 10px 18px;
+      border-radius: 6px;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .add-form button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .status {
+      min-height: 20px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .status.error { color: var(--error); }
+    .status.success { color: var(--success); }
+    .status.info { color: var(--muted); }
+    ul.list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    li.item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    @media (max-width: 600px) {
+      li.item { grid-template-columns: 1fr; }
+    }
+    li.item iframe {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 0;
+      border-radius: 4px;
+      background: #000;
+    }
+    .item-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .item-title {
+      font-weight: 600;
+      font-size: 15px;
+      word-break: break-word;
+    }
+    .item-url {
+      color: var(--muted);
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .item-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .item-actions button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .item-actions button.danger:hover {
+      color: var(--error);
+      border-color: var(--error);
+    }
+    .item-actions button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .speed-badge {
+      display: inline-block;
+      background: var(--border);
+      color: var(--text);
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .edit-form label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .edit-form input,
+    .edit-form select {
+      padding: 8px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .edit-form input:focus,
+    .edit-form select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .empty {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 24px;
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+    }
+    .jam-btn {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 20px;
+      border: 0;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #ff5f6d, #ffc371);
+      color: #fff;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+    .jam-btn:hover { filter: brightness(1.05); }
+    .player-area {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    .player-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .player-header strong { font-size: 14px; }
+    .player-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .speed-control {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .speed-control select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .player-header button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .player-header button:hover {
+      color: var(--error);
+      border-color: var(--error);
+    }
+    .player-area iframe {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="player-area" id="playerArea" hidden>
+      <div class="player-header">
+        <strong id="playerNowPlaying">Now jamming</strong>
+        <div class="player-controls">
+          <label class="speed-control">
+            Speed
+            <select id="jamSpeedSelect"></select>
+          </label>
+          <button type="button" id="stopJamBtn">Stop</button>
+        </div>
+      </div>
+      <div id="playerMount"></div>
+    </section>
+
+    <h1>Youtube Jam Buddy</h1>
+    <p class="subtitle">Paste a YouTube URL to add it to your jam list. Saved locally in your browser.</p>
+
+    <form class="add-form" id="addForm">
+      <input
+        type="url"
+        id="urlInput"
+        placeholder="https://www.youtube.com/watch?v=..."
+        autocomplete="off"
+        required
+      />
+      <button type="submit" id="addBtn">Add</button>
+    </form>
+    <div class="status info" id="status"></div>
+
+    <button type="button" class="jam-btn" id="jamBtn" hidden>Let's Jam</button>
+
+    <ul class="list" id="list"></ul>
+    <div class="empty" id="empty" hidden>No videos yet. Add one above to get started.</div>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "yjb.videos.v1";
+    const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+    // --- State ---
+    let videos = loadVideos();
+    let editingId = null;
+
+    function loadVideos() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveVideos() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(videos));
+    }
+
+    // --- IFrame API loader (only used by the jam player for setPlaybackRate) ---
+    let ytApiPromise = null;
+    function ensureYtApi() {
+      if (ytApiPromise) return ytApiPromise;
+      ytApiPromise = new Promise((resolve) => {
+        if (window.YT && window.YT.Player) return resolve();
+        window.onYouTubeIframeAPIReady = () => resolve();
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+      });
+      return ytApiPromise;
+    }
+
+    // --- URL parsing ---
+    function extractVideoId(url) {
+      try {
+        const u = new URL(url);
+        if (u.hostname === "youtu.be") {
+          return u.pathname.slice(1).split("/")[0] || null;
+        }
+        if (u.hostname.endsWith("youtube.com") || u.hostname.endsWith("youtube-nocookie.com")) {
+          if (u.pathname === "/watch") return u.searchParams.get("v");
+          const parts = u.pathname.split("/").filter(Boolean);
+          // /embed/<id>, /shorts/<id>, /v/<id>, /live/<id>
+          if (["embed", "shorts", "v", "live"].includes(parts[0]) && parts[1]) {
+            return parts[1];
+          }
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+
+    // --- Existence check via YouTube oEmbed ---
+    // 200 = valid (returns title, thumbnail, etc); 400/401/404 = invalid/private.
+    async function verifyVideo(videoId) {
+      const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+      const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`;
+      const res = await fetch(oembedUrl);
+      if (!res.ok) {
+        throw new Error(res.status === 401 ? "Video is private" : "Video not found");
+      }
+      const data = await res.json();
+      return { videoId, title: data.title || videoId };
+    }
+
+    // --- Rendering ---
+    const listEl = document.getElementById("list");
+    const emptyEl = document.getElementById("empty");
+    const jamBtn = document.getElementById("jamBtn");
+    const playerArea = document.getElementById("playerArea");
+    const playerMount = document.getElementById("playerMount");
+    const stopJamBtn = document.getElementById("stopJamBtn");
+    const jamSpeedSelect = document.getElementById("jamSpeedSelect");
+
+    for (const s of SPEEDS) {
+      const opt = document.createElement("option");
+      opt.value = String(s);
+      opt.textContent = `${s}×`;
+      jamSpeedSelect.appendChild(opt);
+    }
+
+    function render() {
+      listEl.replaceChildren();
+      const hasVideos = videos.length > 0;
+      emptyEl.hidden = hasVideos;
+      jamBtn.hidden = !hasVideos;
+      for (const v of videos) {
+        listEl.appendChild(renderItem(v));
+      }
+    }
+
+    function renderItem(v) {
+      const li = document.createElement("li");
+      li.className = "item";
+
+      const iframe = document.createElement("iframe");
+      iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(v.videoId)}`;
+      iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+      iframe.allowFullscreen = true;
+      iframe.title = v.title;
+
+      const meta = document.createElement("div");
+      meta.className = "item-meta";
+      meta.append(editingId === v.id ? renderEditForm(v) : renderViewMeta(v));
+
+      li.append(iframe, meta);
+      return li;
+    }
+
+    function renderViewMeta(v) {
+      const frag = document.createDocumentFragment();
+
+      const title = document.createElement("div");
+      title.className = "item-title";
+      title.textContent = v.title;
+      if (v.playbackRate && v.playbackRate !== 1) {
+        const badge = document.createElement("span");
+        badge.className = "speed-badge";
+        badge.textContent = `${v.playbackRate}×`;
+        title.appendChild(badge);
+      }
+
+      const urlEl = document.createElement("div");
+      urlEl.className = "item-url";
+      urlEl.textContent = v.url;
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => { editingId = v.id; render(); });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "danger";
+      removeBtn.textContent = "Remove";
+      removeBtn.addEventListener("click", () => removeVideo(v.id));
+
+      actions.append(editBtn, removeBtn);
+      frag.append(title, urlEl, actions);
+      return frag;
+    }
+
+    function renderEditForm(v) {
+      const form = document.createElement("form");
+      form.className = "edit-form";
+
+      const titleLabel = document.createElement("label");
+      titleLabel.textContent = "Title";
+      const titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.value = v.title;
+      titleInput.required = true;
+      titleLabel.appendChild(titleInput);
+
+      const speedLabel = document.createElement("label");
+      speedLabel.textContent = "Playback speed";
+      const speedSelect = document.createElement("select");
+      const currentRate = v.playbackRate || 1;
+      for (const s of SPEEDS) {
+        const opt = document.createElement("option");
+        opt.value = String(s);
+        opt.textContent = `${s}×`;
+        if (s === currentRate) opt.selected = true;
+        speedSelect.appendChild(opt);
+      }
+      speedLabel.appendChild(speedSelect);
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "submit";
+      saveBtn.className = "primary";
+      saveBtn.textContent = "Save";
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => { editingId = null; render(); });
+
+      actions.append(saveBtn, cancelBtn);
+      form.append(titleLabel, speedLabel, actions);
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const newTitle = titleInput.value.trim() || v.title;
+        const newRate = parseFloat(speedSelect.value) || 1;
+        videos = videos.map((x) =>
+          x.id === v.id ? { ...x, title: newTitle, playbackRate: newRate } : x
+        );
+        saveVideos();
+        if (isVideoCurrentlyPlaying(v.videoId)) {
+          try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
+        }
+        editingId = null;
+        render();
+      });
+
+      return form;
+    }
+
+    function removeVideo(id) {
+      videos = videos.filter((v) => v.id !== id);
+      if (editingId === id) editingId = null;
+      saveVideos();
+      render();
+    }
+
+    // --- Playback ---
+    // Uses the IFrame API so we can call setPlaybackRate per video.
+    // Sequential auto-advance comes from the embed's `playlist=` param.
+    let jamPlayer = null;
+
+    async function startJam() {
+      if (videos.length === 0) return;
+      await ensureYtApi();
+
+      const [first, ...rest] = videos;
+      const playerVars = { autoplay: 1, rel: 0 };
+      if (rest.length) playerVars.playlist = rest.map((v) => v.videoId).join(",");
+
+      playerMount.replaceChildren();
+      const host = document.createElement("div");
+      playerMount.appendChild(host);
+
+      playerArea.hidden = false;
+      playerArea.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      stopJamPlayer();
+      jamPlayer = new YT.Player(host, {
+        videoId: first.videoId,
+        width: "100%",
+        height: "100%",
+        playerVars,
+        events: {
+          onReady: applyCurrentRate,
+          onStateChange: (e) => {
+            if (e.data === YT.PlayerState.PLAYING) applyCurrentRate(e);
+          },
+        },
+      });
+    }
+
+    function applyCurrentRate(e) {
+      const data = e.target.getVideoData && e.target.getVideoData();
+      const id = data && data.video_id;
+      const v = id ? videos.find((x) => x.videoId === id) : null;
+      const rate = v && v.playbackRate ? v.playbackRate : 1;
+      try { e.target.setPlaybackRate(rate); } catch (_) {}
+      jamSpeedSelect.value = String(rate);
+    }
+
+    function isVideoCurrentlyPlaying(videoId) {
+      if (!jamPlayer || typeof jamPlayer.getVideoData !== "function") return false;
+      try {
+        return jamPlayer.getVideoData().video_id === videoId;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function stopJamPlayer() {
+      if (jamPlayer) {
+        try { jamPlayer.destroy(); } catch (_) {}
+        jamPlayer = null;
+      }
+    }
+
+    function stopJam() {
+      stopJamPlayer();
+      playerMount.replaceChildren();
+      playerArea.hidden = true;
+    }
+
+    jamBtn.addEventListener("click", startJam);
+    stopJamBtn.addEventListener("click", stopJam);
+
+    jamSpeedSelect.addEventListener("change", () => {
+      if (!jamPlayer || typeof jamPlayer.getVideoData !== "function") return;
+      const newRate = parseFloat(jamSpeedSelect.value) || 1;
+      let currentId;
+      try { currentId = jamPlayer.getVideoData().video_id; } catch (_) { return; }
+      if (!currentId) return;
+
+      videos = videos.map((x) =>
+        x.videoId === currentId ? { ...x, playbackRate: newRate } : x
+      );
+      saveVideos();
+      try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
+      if (editingId === null) render();
+    });
+
+    // --- Add flow ---
+    const form = document.getElementById("addForm");
+    const input = document.getElementById("urlInput");
+    const addBtn = document.getElementById("addBtn");
+    const statusEl = document.getElementById("status");
+
+    function setStatus(text, kind = "info") {
+      statusEl.textContent = text;
+      statusEl.className = `status ${kind}`;
+    }
+
+    setStatus("", "info");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = input.value.trim();
+      if (!url) return;
+
+      const videoId = extractVideoId(url);
+      if (!videoId) {
+        setStatus("That doesn't look like a YouTube URL.", "error");
+        return;
+      }
+
+      if (videos.some((v) => v.videoId === videoId)) {
+        setStatus("That video is already in your list.", "error");
+        return;
+      }
+
+      addBtn.disabled = true;
+      setStatus("Verifying video…", "info");
+
+      try {
+        const { title } = await verifyVideo(videoId);
+        const entry = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          videoId,
+          url,
+          title,
+          addedAt: new Date().toISOString(),
+        };
+        videos.push(entry);
+        saveVideos();
+        render();
+        input.value = "";
+        setStatus(`Added "${title}".`, "success");
+      } catch (err) {
+        setStatus(`Could not add: ${err.message}`, "error");
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
