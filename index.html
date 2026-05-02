@@ -95,6 +95,10 @@
       gap: 16px;
       align-items: center;
     }
+    li.item[draggable="true"] { cursor: grab; }
+    li.item.dragging { opacity: 0.4; cursor: grabbing; }
+    li.item.drop-above { box-shadow: 0 -3px 0 0 var(--accent); }
+    li.item.drop-below { box-shadow: 0 3px 0 0 var(--accent); }
     @media (max-width: 600px) {
       li.item { grid-template-columns: 1fr; }
     }
@@ -154,6 +158,23 @@
       margin-left: 6px;
       vertical-align: middle;
     }
+    .item-range {
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .edit-form-row {
+      display: flex;
+      gap: 8px;
+    }
+    .edit-form-row label {
+      flex: 1;
+    }
+    .edit-form-error {
+      color: var(--error);
+      font-size: 12px;
+      min-height: 16px;
+    }
     .edit-form {
       display: flex;
       flex-direction: column;
@@ -193,7 +214,7 @@
       margin-bottom: 20px;
       border: 0;
       border-radius: 8px;
-      background: linear-gradient(135deg, #ff5f6d, #ffc371);
+      background: linear-gradient(135deg, #8b5cf6, #06b6d4);
       color: #fff;
       font-weight: 700;
       font-size: 16px;
@@ -307,6 +328,9 @@
     // --- State ---
     let videos = loadVideos();
     let editingId = null;
+    let draggedId = null;
+    let dropTargetId = null;
+    let dropPosition = null;
 
     function loadVideos() {
       try {
@@ -320,7 +344,27 @@
     }
 
     function saveVideos() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(videos));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(videos));
+        return true;
+      } catch (err) {
+        const isQuota =
+          err && (
+            err.name === "QuotaExceededError" ||
+            err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+            err.code === 22 ||
+            err.code === 1014
+          );
+        setStatus(
+          isQuota
+            ? "Browser storage is full — change not saved. Remove a video and try again."
+            : `Could not save: ${err && err.message ? err.message : err}`,
+          "error"
+        );
+        videos = loadVideos();
+        render();
+        return false;
+      }
     }
 
     // --- IFrame API loader (only used by the jam player for setPlaybackRate) ---
@@ -335,6 +379,25 @@
         document.head.appendChild(tag);
       });
       return ytApiPromise;
+    }
+
+    // --- Time helpers (HH:MM:SS <-> seconds) ---
+    const TIME_PATTERN = /^(\d{1,2}):([0-5]?\d):([0-5]?\d)$/;
+
+    function parseTimeToSeconds(input) {
+      if (!input) return null;
+      const m = input.trim().match(TIME_PATTERN);
+      if (!m) return null;
+      return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]);
+    }
+
+    function formatSecondsToTime(seconds) {
+      if (seconds == null) return "";
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${pad(h)}:${pad(m)}:${pad(s)}`;
     }
 
     // --- URL parsing ---
@@ -400,6 +463,8 @@
     function renderItem(v) {
       const li = document.createElement("li");
       li.className = "item";
+      li.dataset.id = v.id;
+      li.draggable = editingId !== v.id;
 
       const iframe = document.createElement("iframe");
       iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(v.videoId)}`;
@@ -412,7 +477,68 @@
       meta.append(editingId === v.id ? renderEditForm(v) : renderViewMeta(v));
 
       li.append(iframe, meta);
+      attachDragHandlers(li, v);
       return li;
+    }
+
+    function attachDragHandlers(li, v) {
+      li.addEventListener("dragstart", (e) => {
+        if (!li.draggable) return;
+        draggedId = v.id;
+        li.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", v.id);
+      });
+
+      li.addEventListener("dragend", () => {
+        li.classList.remove("dragging");
+        clearDropIndicators();
+        draggedId = null;
+      });
+
+      li.addEventListener("dragover", (e) => {
+        if (!draggedId || draggedId === v.id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = li.getBoundingClientRect();
+        const newPos = e.clientY < rect.top + rect.height / 2 ? "above" : "below";
+        if (dropTargetId === v.id && dropPosition === newPos) return;
+        clearDropIndicators();
+        li.classList.add(newPos === "above" ? "drop-above" : "drop-below");
+        dropTargetId = v.id;
+        dropPosition = newPos;
+      });
+
+      li.addEventListener("drop", (e) => {
+        if (!draggedId || draggedId === v.id) return;
+        e.preventDefault();
+        const before = dropPosition === "above";
+        const movedId = draggedId;
+        clearDropIndicators();
+        reorderVideos(movedId, v.id, before);
+      });
+    }
+
+    function clearDropIndicators() {
+      for (const el of document.querySelectorAll(".drop-above, .drop-below")) {
+        el.classList.remove("drop-above", "drop-below");
+      }
+      dropTargetId = null;
+      dropPosition = null;
+    }
+
+    function reorderVideos(fromId, toId, before) {
+      const fromIdx = videos.findIndex((v) => v.id === fromId);
+      if (fromIdx === -1) return;
+      const next = videos.slice();
+      const [moved] = next.splice(fromIdx, 1);
+      let toIdx = next.findIndex((v) => v.id === toId);
+      if (toIdx === -1) return;
+      if (!before) toIdx += 1;
+      next.splice(toIdx, 0, moved);
+      videos = next;
+      if (!saveVideos()) return;
+      render();
     }
 
     function renderViewMeta(v) {
@@ -432,6 +558,17 @@
       urlEl.className = "item-url";
       urlEl.textContent = v.url;
 
+      frag.append(title, urlEl);
+
+      if (v.startSeconds != null || v.endSeconds != null) {
+        const range = document.createElement("div");
+        range.className = "item-range";
+        const start = v.startSeconds != null ? formatSecondsToTime(v.startSeconds) : "00:00:00";
+        const end = v.endSeconds != null ? formatSecondsToTime(v.endSeconds) : "end";
+        range.textContent = `${start} → ${end}`;
+        frag.appendChild(range);
+      }
+
       const actions = document.createElement("div");
       actions.className = "item-actions";
 
@@ -447,7 +584,7 @@
       removeBtn.addEventListener("click", () => removeVideo(v.id));
 
       actions.append(editBtn, removeBtn);
-      frag.append(title, urlEl, actions);
+      frag.append(actions);
       return frag;
     }
 
@@ -476,6 +613,30 @@
       }
       speedLabel.appendChild(speedSelect);
 
+      const timeRow = document.createElement("div");
+      timeRow.className = "edit-form-row";
+
+      const startLabel = document.createElement("label");
+      startLabel.textContent = "Start (HH:MM:SS)";
+      const startInput = document.createElement("input");
+      startInput.type = "text";
+      startInput.placeholder = "00:00:00";
+      startInput.value = v.startSeconds != null ? formatSecondsToTime(v.startSeconds) : "";
+      startLabel.appendChild(startInput);
+
+      const endLabel = document.createElement("label");
+      endLabel.textContent = "End (HH:MM:SS)";
+      const endInput = document.createElement("input");
+      endInput.type = "text";
+      endInput.placeholder = "leave blank for end";
+      endInput.value = v.endSeconds != null ? formatSecondsToTime(v.endSeconds) : "";
+      endLabel.appendChild(endInput);
+
+      timeRow.append(startLabel, endLabel);
+
+      const errorEl = document.createElement("div");
+      errorEl.className = "edit-form-error";
+
       const actions = document.createElement("div");
       actions.className = "item-actions";
 
@@ -490,16 +651,44 @@
       cancelBtn.addEventListener("click", () => { editingId = null; render(); });
 
       actions.append(saveBtn, cancelBtn);
-      form.append(titleLabel, speedLabel, actions);
+      form.append(titleLabel, speedLabel, timeRow, errorEl, actions);
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
+        errorEl.textContent = "";
+
         const newTitle = titleInput.value.trim() || v.title;
         const newRate = parseFloat(speedSelect.value) || 1;
+
+        const startStr = startInput.value.trim();
+        const endStr = endInput.value.trim();
+        let startSec = null;
+        let endSec = null;
+        if (startStr) {
+          startSec = parseTimeToSeconds(startStr);
+          if (startSec === null) {
+            errorEl.textContent = "Start must be in HH:MM:SS format (e.g. 00:01:30).";
+            return;
+          }
+        }
+        if (endStr) {
+          endSec = parseTimeToSeconds(endStr);
+          if (endSec === null) {
+            errorEl.textContent = "End must be in HH:MM:SS format (e.g. 00:03:00).";
+            return;
+          }
+        }
+        if (startSec != null && endSec != null && endSec <= startSec) {
+          errorEl.textContent = "End must be after start.";
+          return;
+        }
+
         videos = videos.map((x) =>
-          x.id === v.id ? { ...x, title: newTitle, playbackRate: newRate } : x
+          x.id === v.id
+            ? { ...x, title: newTitle, playbackRate: newRate, startSeconds: startSec, endSeconds: endSec }
+            : x
         );
-        saveVideos();
+        if (!saveVideos()) return;
         if (isVideoCurrentlyPlaying(v.videoId)) {
           try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
         }
@@ -518,17 +707,18 @@
     }
 
     // --- Playback ---
-    // Uses the IFrame API so we can call setPlaybackRate per video.
-    // Sequential auto-advance comes from the embed's `playlist=` param.
+    // Self-managed queue: loadVideoById per item with optional start/end seconds,
+    // advance on ENDED. Snapshot at start so list edits don't shift indices mid-jam.
     let jamPlayer = null;
+    let jamQueue = [];
+    let jamIndex = 0;
 
     async function startJam() {
       if (videos.length === 0) return;
       await ensureYtApi();
 
-      const [first, ...rest] = videos;
-      const playerVars = { autoplay: 1, rel: 0 };
-      if (rest.length) playerVars.playlist = rest.map((v) => v.videoId).join(",");
+      jamQueue = videos.slice();
+      jamIndex = 0;
 
       playerMount.replaceChildren();
       const host = document.createElement("div");
@@ -539,35 +729,49 @@
 
       stopJamPlayer();
       jamPlayer = new YT.Player(host, {
-        videoId: first.videoId,
         width: "100%",
         height: "100%",
-        playerVars,
+        playerVars: { rel: 0 },
         events: {
-          onReady: applyCurrentRate,
+          onReady: () => loadJamItem(jamIndex),
           onStateChange: (e) => {
             if (e.data === YT.PlayerState.PLAYING) applyCurrentRate(e);
+            else if (e.data === YT.PlayerState.ENDED) advanceJam();
           },
         },
       });
     }
 
+    function loadJamItem(index) {
+      const v = jamQueue[index];
+      if (!v || !jamPlayer) return;
+      const args = { videoId: v.videoId };
+      if (v.startSeconds != null) args.startSeconds = v.startSeconds;
+      if (v.endSeconds != null) args.endSeconds = v.endSeconds;
+      try { jamPlayer.loadVideoById(args); } catch (_) {}
+    }
+
+    function advanceJam() {
+      jamIndex += 1;
+      if (jamIndex >= jamQueue.length) return;
+      loadJamItem(jamIndex);
+    }
+
+    function currentJamVideo() {
+      return jamQueue[jamIndex] || null;
+    }
+
     function applyCurrentRate(e) {
-      const data = e.target.getVideoData && e.target.getVideoData();
-      const id = data && data.video_id;
-      const v = id ? videos.find((x) => x.videoId === id) : null;
-      const rate = v && v.playbackRate ? v.playbackRate : 1;
+      const v = currentJamVideo();
+      const latest = v ? videos.find((x) => x.id === v.id) || v : null;
+      const rate = latest && latest.playbackRate ? latest.playbackRate : 1;
       try { e.target.setPlaybackRate(rate); } catch (_) {}
       jamSpeedSelect.value = String(rate);
     }
 
     function isVideoCurrentlyPlaying(videoId) {
-      if (!jamPlayer || typeof jamPlayer.getVideoData !== "function") return false;
-      try {
-        return jamPlayer.getVideoData().video_id === videoId;
-      } catch (_) {
-        return false;
-      }
+      const v = currentJamVideo();
+      return !!v && v.videoId === videoId;
     }
 
     function stopJamPlayer() {
@@ -579,6 +783,8 @@
 
     function stopJam() {
       stopJamPlayer();
+      jamQueue = [];
+      jamIndex = 0;
       playerMount.replaceChildren();
       playerArea.hidden = true;
     }
@@ -587,14 +793,13 @@
     stopJamBtn.addEventListener("click", stopJam);
 
     jamSpeedSelect.addEventListener("change", () => {
-      if (!jamPlayer || typeof jamPlayer.getVideoData !== "function") return;
+      if (!jamPlayer) return;
+      const current = currentJamVideo();
+      if (!current) return;
       const newRate = parseFloat(jamSpeedSelect.value) || 1;
-      let currentId;
-      try { currentId = jamPlayer.getVideoData().video_id; } catch (_) { return; }
-      if (!currentId) return;
 
       videos = videos.map((x) =>
-        x.videoId === currentId ? { ...x, playbackRate: newRate } : x
+        x.id === current.id ? { ...x, playbackRate: newRate } : x
       );
       saveVideos();
       try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
@@ -643,7 +848,7 @@
           addedAt: new Date().toISOString(),
         };
         videos.push(entry);
-        saveVideos();
+        if (!saveVideos()) return;
         render();
         input.value = "";
         setStatus(`Added "${title}".`, "success");
