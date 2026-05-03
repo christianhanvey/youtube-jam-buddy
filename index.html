@@ -28,11 +28,19 @@
       gap: 24px;
       max-width: 1000px;
       margin: 0 auto;
-      padding: 32px 20px 80px;
+      padding: 32px 20px;
     }
     .sidebar {
       width: 200px;
       flex-shrink: 0;
+      position: sticky;
+      top: 32px;
+      align-self: flex-start;
+      min-height: calc(100vh - 64px);
+      max-height: calc(100vh - 64px);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
     }
     .sidebar-title {
       margin: 0 0 12px;
@@ -98,6 +106,22 @@
       color: var(--accent);
       border-color: var(--accent);
     }
+    .sidebar-title-settings {
+      margin-top: 24px;
+    }
+    .sidebar-bottom-anchor {
+      margin-top: auto;
+      padding-top: 24px;
+    }
+    .sidebar-setting {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+    }
     main {
       flex: 1;
       min-width: 0;
@@ -108,6 +132,13 @@
       }
       .sidebar {
         width: auto;
+        position: static;
+        max-height: none;
+        overflow-y: visible;
+      }
+      .sidebar-bottom-anchor {
+        margin-top: 24px;
+        padding-top: 0;
       }
     }
     h1 {
@@ -429,6 +460,12 @@
       <h3 class="sidebar-title">Jam Playlists</h3>
       <ul class="playlist-list" id="playlistList"></ul>
       <button type="button" class="new-list-btn" id="newListBtn">+ New playlist</button>
+      <h3 class="sidebar-title sidebar-title-settings sidebar-bottom-anchor">Settings</h3>
+      <label class="sidebar-setting">
+        <input type="checkbox" id="loopPlaylistCheckbox">
+        Loop playlist
+      </label>
+      <h3 class="sidebar-title sidebar-title-settings">Tools</h3>
       <button type="button" class="export-btn" id="exportListBtn">Export</button>
       <button type="button" class="import-btn" id="importListBtn">Import</button>
     </aside>
@@ -483,12 +520,13 @@
     const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // --- State ---
-    // Storage shape: { activeId, lists: [{ id, title, videos }] }
+    // Storage shape: { activeId, lists: [{ id, title, videos }], loopPlaylist }
     // `videos` and `listTitle` are working copies of the active list; saveList
     // syncs them back into the active list entry before writing.
     const initialState = loadState();
     let lists = initialState.lists;
     let activeId = initialState.activeId;
+    let loopPlaylist = initialState.loopPlaylist;
     const initialActive = lists.find((l) => l.id === activeId) || lists[0];
     let videos = initialActive.videos;
     let listTitle = initialActive.title;
@@ -504,7 +542,7 @@
 
     function defaultState() {
       const id = newListId();
-      return { activeId: id, lists: [{ id, title: DEFAULT_LIST_TITLE, videos: [] }] };
+      return { activeId: id, lists: [{ id, title: DEFAULT_LIST_TITLE, videos: [] }], loopPlaylist: false };
     }
 
     function loadState() {
@@ -523,7 +561,7 @@
         const activeId = typeof parsed.activeId === "string" && lists.some((l) => l.id === parsed.activeId)
           ? parsed.activeId
           : lists[0].id;
-        return { activeId, lists };
+        return { activeId, lists, loopPlaylist: parsed.loopPlaylist === true };
       } catch {
         return defaultState();
       }
@@ -536,7 +574,7 @@
         active.title = listTitle;
       }
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeId, lists }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeId, lists, loopPlaylist }));
         return true;
       } catch (err) {
         const isQuota =
@@ -555,6 +593,7 @@
         const restored = loadState();
         lists = restored.lists;
         activeId = restored.activeId;
+        loopPlaylist = restored.loopPlaylist;
         const restoredActive = lists.find((l) => l.id === activeId);
         videos = restoredActive ? restoredActive.videos : [];
         listTitle = restoredActive ? restoredActive.title : DEFAULT_LIST_TITLE;
@@ -637,6 +676,8 @@
     const newListBtn = document.getElementById("newListBtn");
     const exportListBtn = document.getElementById("exportListBtn");
     const importListBtn = document.getElementById("importListBtn");
+    const loopPlaylistCheckbox = document.getElementById("loopPlaylistCheckbox");
+    loopPlaylistCheckbox.checked = loopPlaylist;
     const emptyEl = document.getElementById("empty");
     const jamBtn = document.getElementById("jamBtn");
     const playerArea = document.getElementById("playerArea");
@@ -1176,10 +1217,16 @@
     }
 
     function advanceJam() {
-      jamIndex += 1;
-      if (jamIndex >= jamQueue.length) {
-        updateNavButtons();
-        return;
+      if (jamQueue.length === 0) return;
+      const nextIndex = jamIndex + 1;
+      if (nextIndex >= jamQueue.length) {
+        if (!loopPlaylist) {
+          updateNavButtons();
+          return;
+        }
+        jamIndex = 0;
+      } else {
+        jamIndex = nextIndex;
       }
       loadJamItem(jamIndex);
     }
@@ -1187,7 +1234,7 @@
     function updateNavButtons() {
       const active = !!jamPlayer && jamQueue.length > 0;
       jamPrevBtn.disabled = !active || jamIndex <= 0;
-      jamNextBtn.disabled = !active || jamIndex >= jamQueue.length - 1;
+      jamNextBtn.disabled = !active || (!loopPlaylist && jamIndex >= jamQueue.length - 1);
     }
 
     function currentJamVideo() {
@@ -1232,6 +1279,11 @@
     newListBtn.addEventListener("click", createList);
     exportListBtn.addEventListener("click", exportActiveList);
     importListBtn.addEventListener("click", importLists);
+    loopPlaylistCheckbox.addEventListener("change", () => {
+      loopPlaylist = loopPlaylistCheckbox.checked;
+      saveList();
+      updateNavButtons();
+    });
 
     async function importLists() {
       let file = null;
@@ -1347,8 +1399,13 @@
     });
 
     jamNextBtn.addEventListener("click", () => {
-      if (!jamPlayer || jamIndex >= jamQueue.length - 1) return;
-      jamIndex += 1;
+      if (!jamPlayer || jamQueue.length === 0) return;
+      if (jamIndex >= jamQueue.length - 1) {
+        if (!loopPlaylist) return;
+        jamIndex = 0;
+      } else {
+        jamIndex += 1;
+      }
       loadJamItem(jamIndex);
     });
 
