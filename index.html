@@ -59,7 +59,6 @@
     }
     .playlist-list button {
       width: 100%;
-      text-align: left;
       background: transparent;
       border: 1px solid transparent;
       color: var(--text);
@@ -67,19 +66,39 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
-      word-break: break-word;
       font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .playlist-list .playlist-title {
+      flex: 1;
+      text-align: left;
+      word-break: break-word;
     }
     .playlist-list button:hover {
       background: var(--panel);
     }
     .playlist-list button.active {
       background: var(--panel);
-      border-color: var(--accent);
+      border-color: transparent;
+      box-shadow: inset 3px 0 0 var(--accent);
+      font-weight: 600;
+      color: #fff;
     }
     .playlist-list .count {
+      flex-shrink: 0;
+      background: var(--border);
       color: var(--muted);
-      margin-left: 4px;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+    }
+    .playlist-list button.active .count {
+      background: var(--accent);
+      color: #fff;
     }
     .playlist-list button.drop-target {
       background: var(--panel);
@@ -255,16 +274,32 @@
       border-radius: 8px;
       padding: 12px;
       display: grid;
-      grid-template-columns: 240px 1fr;
+      grid-template-columns: 16px 240px 1fr;
       gap: 16px;
       align-items: center;
     }
-    li.item[draggable="true"] { cursor: grab; }
-    li.item.dragging { opacity: 0.4; cursor: grabbing; }
+    li.item.dragging { opacity: 0.4; }
     li.item.drop-above { box-shadow: 0 -3px 0 0 var(--accent); }
     li.item.drop-below { box-shadow: 0 3px 0 0 var(--accent); }
+    .drag-handle {
+      cursor: grab;
+      color: var(--muted);
+      user-select: none;
+      font-size: 14px;
+      line-height: 1;
+      letter-spacing: -3px;
+      text-align: center;
+      align-self: stretch;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .drag-handle:hover { color: var(--text); }
+    li.item.dragging .drag-handle { cursor: grabbing; }
+    li.item[draggable="false"] .drag-handle { cursor: default; opacity: 0.3; }
     @media (max-width: 600px) {
       li.item { grid-template-columns: 1fr; }
+      .drag-handle { display: none; }
     }
     li.item .item-thumb {
       width: 100%;
@@ -738,6 +773,7 @@
     const jamBtn = document.getElementById("jamBtn");
     const playerArea = document.getElementById("playerArea");
     const playerMount = document.getElementById("playerMount");
+    const playerNowPlaying = document.getElementById("playerNowPlaying");
     const stopJamBtn = document.getElementById("stopJamBtn");
     const jamPrevBtn = document.getElementById("jamPrevBtn");
     const jamNextBtn = document.getElementById("jamNextBtn");
@@ -773,12 +809,14 @@
         const li = document.createElement("li");
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.append(list.title);
+        const titleEl = document.createElement("span");
+        titleEl.className = "playlist-title";
+        titleEl.textContent = list.title;
         const count = list.id === activeId ? videos.length : list.videos.length;
         const countEl = document.createElement("span");
         countEl.className = "count";
-        countEl.textContent = `(${count})`;
-        btn.appendChild(countEl);
+        countEl.textContent = String(count);
+        btn.append(titleEl, countEl);
         if (list.id === activeId) btn.classList.add("active");
         btn.addEventListener("click", () => switchActiveList(list.id));
         if (list.id !== activeId) attachSidebarDropHandlers(btn, list.id);
@@ -924,6 +962,12 @@
       li.dataset.id = v.id;
       li.draggable = editingId !== v.id;
 
+      const handle = document.createElement("span");
+      handle.className = "drag-handle";
+      handle.setAttribute("aria-hidden", "true");
+      handle.title = "Drag to reorder or move to another playlist";
+      handle.textContent = "⋮⋮";
+
       const thumb = document.createElement("img");
       thumb.className = "item-thumb";
       thumb.src = `https://i.ytimg.com/vi/${encodeURIComponent(v.videoId)}/mqdefault.jpg`;
@@ -934,7 +978,7 @@
       meta.className = "item-meta";
       meta.append(editingId === v.id ? renderEditForm(v) : renderViewMeta(v));
 
-      li.append(thumb, meta);
+      li.append(handle, thumb, meta);
       attachDragHandlers(li, v);
       return li;
     }
@@ -1070,6 +1114,12 @@
       const actions = document.createElement("div");
       actions.className = "item-actions";
 
+      const playBtn = document.createElement("button");
+      playBtn.type = "button";
+      playBtn.className = "primary";
+      playBtn.textContent = "▶ Play";
+      playBtn.addEventListener("click", () => playVideoEntry(v.id));
+
       const editBtn = document.createElement("button");
       editBtn.type = "button";
       editBtn.textContent = "Edit";
@@ -1081,7 +1131,7 @@
       removeBtn.textContent = "Remove";
       removeBtn.addEventListener("click", () => removeVideo(v.id));
 
-      actions.append(editBtn, removeBtn);
+      actions.append(playBtn, editBtn, removeBtn);
       frag.append(actions);
       return frag;
     }
@@ -1233,12 +1283,26 @@
     let jamQueue = [];
     let jamIndex = 0;
 
-    async function startJam() {
+    async function playVideoEntry(id) {
+      const idx = videos.findIndex((v) => v.id === id);
+      if (idx === -1) return;
+      if (jamPlayer) {
+        jamQueue = videos.slice();
+        jamIndex = idx;
+        loadJamItem(jamIndex);
+        playerArea.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        await startJam(idx);
+      }
+    }
+
+    async function startJam(startIndex) {
       if (videos.length === 0) return;
       await ensureYtApi();
 
       jamQueue = videos.slice();
-      jamIndex = 0;
+      const idx = typeof startIndex === "number" ? startIndex : 0;
+      jamIndex = Math.max(0, Math.min(idx, jamQueue.length - 1));
 
       playerMount.replaceChildren();
       const host = document.createElement("div");
@@ -1269,6 +1333,7 @@
       if (v.startSeconds != null) args.startSeconds = v.startSeconds;
       if (v.endSeconds != null) args.endSeconds = v.endSeconds;
       try { jamPlayer.loadVideoById(args); } catch (_) {}
+      playerNowPlaying.textContent = v.title;
       updateNavButtons();
     }
 
@@ -1327,10 +1392,11 @@
       jamIndex = 0;
       playerMount.replaceChildren();
       playerArea.hidden = true;
+      playerNowPlaying.textContent = "Now jamming";
       updateNavButtons();
     }
 
-    jamBtn.addEventListener("click", startJam);
+    jamBtn.addEventListener("click", () => startJam(0));
     stopJamBtn.addEventListener("click", stopJam);
     newListBtn.addEventListener("click", createList);
     exportListBtn.addEventListener("click", exportActiveList);
