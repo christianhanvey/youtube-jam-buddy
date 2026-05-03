@@ -6,9 +6,9 @@ Paste any YouTube URL to add it to a playlist, then hit **Let's Jam** to play th
 
 ## Features
 
-- Multiple playlists, each with its own title — switch between them from the sidebar.
+- Multiple playlists, each with its own title — switch between them from the sidebar, which also shows each playlist's video count.
 - Per-video custom start/end times (`HH:MM:SS`), playback speed (0.25× – 2×), and volume.
-- Drag-and-drop to reorder videos within a playlist.
+- Drag-and-drop to reorder videos within a playlist, or onto another playlist in the sidebar to move a video between lists.
 - Sequential playback with prev/next controls and a stop button.
 - Everything is saved in your browser — no account, no backend, no API key.
 
