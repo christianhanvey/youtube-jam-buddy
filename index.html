@@ -106,6 +106,16 @@
       color: var(--accent);
       border-color: var(--accent);
     }
+    .tools-row {
+      display: flex;
+      gap: 8px;
+    }
+    .tools-row .export-btn,
+    .tools-row .import-btn {
+      flex: 1;
+      width: auto;
+      text-align: center;
+    }
     .sidebar-title-settings {
       margin-top: 24px;
     }
@@ -121,6 +131,47 @@
       color: var(--muted);
       font-size: 14px;
       cursor: pointer;
+    }
+    .toggle {
+      position: relative;
+      flex-shrink: 0;
+      width: 32px;
+      height: 18px;
+      display: inline-block;
+    }
+    .toggle input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 999px;
+      transition: background 0.15s ease;
+    }
+    .toggle-slider::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background: var(--text);
+      border-radius: 50%;
+      transition: transform 0.15s ease;
+    }
+    .toggle input:checked + .toggle-slider {
+      background: var(--accent);
+    }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(14px);
+    }
+    .toggle input:focus-visible + .toggle-slider {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
     main {
       flex: 1;
@@ -462,12 +513,17 @@
       <button type="button" class="new-list-btn" id="newListBtn">+ New playlist</button>
       <h3 class="sidebar-title sidebar-title-settings sidebar-bottom-anchor">Settings</h3>
       <label class="sidebar-setting">
-        <input type="checkbox" id="loopPlaylistCheckbox">
+        <span class="toggle">
+          <input type="checkbox" id="loopPlaylistCheckbox">
+          <span class="toggle-slider"></span>
+        </span>
         Loop playlist
       </label>
       <h3 class="sidebar-title sidebar-title-settings">Tools</h3>
-      <button type="button" class="export-btn" id="exportListBtn">Export</button>
-      <button type="button" class="import-btn" id="importListBtn">Import</button>
+      <div class="tools-row">
+        <button type="button" class="export-btn" id="exportListBtn">Export</button>
+        <button type="button" class="import-btn" id="importListBtn">Import</button>
+      </div>
     </aside>
     <main>
     <section class="player-area" id="playerArea" hidden>
