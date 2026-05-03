@@ -264,6 +264,22 @@
       font-size: 12px;
       cursor: pointer;
     }
+    .volume-control {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .volume-control input[type="range"] {
+      width: 80px;
+      cursor: pointer;
+    }
+    .volume-control span {
+      font-variant-numeric: tabular-nums;
+      min-width: 36px;
+      text-align: right;
+    }
     .player-header button {
       background: transparent;
       border: 1px solid var(--border);
@@ -302,6 +318,11 @@
           <label class="speed-control">
             Speed
             <select id="jamSpeedSelect"></select>
+          </label>
+          <label class="volume-control">
+            Vol
+            <input type="range" id="jamVolumeSlider" min="0" max="100" value="100">
+            <span id="jamVolumeValue">100%</span>
           </label>
           <button type="button" id="jamPrevBtn" disabled>‹ Prev</button>
           <button type="button" id="jamNextBtn" disabled>Next ›</button>
@@ -455,6 +476,8 @@
     const jamPrevBtn = document.getElementById("jamPrevBtn");
     const jamNextBtn = document.getElementById("jamNextBtn");
     const jamSpeedSelect = document.getElementById("jamSpeedSelect");
+    const jamVolumeSlider = document.getElementById("jamVolumeSlider");
+    const jamVolumeValue = document.getElementById("jamVolumeValue");
 
     for (const s of SPEEDS) {
       const opt = document.createElement("option");
@@ -566,6 +589,12 @@
         badge.textContent = `${v.playbackRate}×`;
         title.appendChild(badge);
       }
+      if (typeof v.volume === "number" && v.volume !== 100) {
+        const badge = document.createElement("span");
+        badge.className = "speed-badge";
+        badge.textContent = `${v.volume}%`;
+        title.appendChild(badge);
+      }
 
       const urlEl = document.createElement("div");
       urlEl.className = "item-url";
@@ -626,6 +655,23 @@
       }
       speedLabel.appendChild(speedSelect);
 
+      const volumeLabel = document.createElement("label");
+      volumeLabel.style.display = "flex";
+      volumeLabel.style.flexDirection = "column";
+      volumeLabel.style.gap = "4px";
+      const volumeLabelText = document.createElement("span");
+      const currentVolume = typeof v.volume === "number" ? v.volume : 100;
+      volumeLabelText.textContent = `Volume — ${currentVolume}%`;
+      const volumeInput = document.createElement("input");
+      volumeInput.type = "range";
+      volumeInput.min = "0";
+      volumeInput.max = "100";
+      volumeInput.value = String(currentVolume);
+      volumeInput.addEventListener("input", () => {
+        volumeLabelText.textContent = `Volume — ${volumeInput.value}%`;
+      });
+      volumeLabel.append(volumeLabelText, volumeInput);
+
       const timeRow = document.createElement("div");
       timeRow.className = "edit-form-row";
 
@@ -664,7 +710,7 @@
       cancelBtn.addEventListener("click", () => { editingId = null; render(); });
 
       actions.append(saveBtn, cancelBtn);
-      form.append(titleLabel, speedLabel, timeRow, errorEl, actions);
+      form.append(titleLabel, speedLabel, timeRow, volumeLabel, errorEl, actions);
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -696,14 +742,19 @@
           return;
         }
 
+        const newVolume = parseInt(volumeInput.value, 10);
+
         videos = videos.map((x) =>
           x.id === v.id
-            ? { ...x, title: newTitle, playbackRate: newRate, startSeconds: startSec, endSeconds: endSec }
+            ? { ...x, title: newTitle, playbackRate: newRate, volume: newVolume, startSeconds: startSec, endSeconds: endSec }
             : x
         );
         if (!saveVideos()) return;
         if (isVideoCurrentlyPlaying(v.videoId)) {
           try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
+          try { jamPlayer.setVolume(newVolume); } catch (_) {}
+          jamVolumeSlider.value = String(newVolume);
+          jamVolumeValue.textContent = `${newVolume}%`;
         }
         editingId = null;
         render();
@@ -748,7 +799,7 @@
         events: {
           onReady: () => loadJamItem(jamIndex),
           onStateChange: (e) => {
-            if (e.data === YT.PlayerState.PLAYING) applyCurrentRate(e);
+            if (e.data === YT.PlayerState.PLAYING) applyCurrentSettings(e);
             else if (e.data === YT.PlayerState.ENDED) advanceJam();
           },
         },
@@ -784,12 +835,16 @@
       return jamQueue[jamIndex] || null;
     }
 
-    function applyCurrentRate(e) {
+    function applyCurrentSettings(e) {
       const v = currentJamVideo();
       const latest = v ? videos.find((x) => x.id === v.id) || v : null;
       const rate = latest && latest.playbackRate ? latest.playbackRate : 1;
+      const volume = latest && typeof latest.volume === "number" ? latest.volume : 100;
       try { e.target.setPlaybackRate(rate); } catch (_) {}
+      try { e.target.setVolume(volume); } catch (_) {}
       jamSpeedSelect.value = String(rate);
+      jamVolumeSlider.value = String(volume);
+      jamVolumeValue.textContent = `${volume}%`;
     }
 
     function isVideoCurrentlyPlaying(videoId) {
@@ -839,6 +894,23 @@
       );
       saveVideos();
       try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
+      if (editingId === null) render();
+    });
+
+    jamVolumeSlider.addEventListener("input", () => {
+      const newVolume = parseInt(jamVolumeSlider.value, 10);
+      jamVolumeValue.textContent = `${newVolume}%`;
+      if (!jamPlayer) return;
+      const current = currentJamVideo();
+      if (!current) return;
+      videos = videos.map((x) =>
+        x.id === current.id ? { ...x, volume: newVolume } : x
+      );
+      try { jamPlayer.setVolume(newVolume); } catch (_) {}
+    });
+
+    jamVolumeSlider.addEventListener("change", () => {
+      saveVideos();
       if (editingId === null) render();
     });
 
