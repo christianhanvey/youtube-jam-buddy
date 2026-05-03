@@ -4,6 +4,8 @@ A single-page web app for building YouTube playlists tuned for jamming and pract
 
 Paste any YouTube URL to add it to a playlist, then hit **Let's Jam** to play through the videos in sequence. Each video can be customised with a playback start time, end time, speed, and volume — useful for skipping intros, looping a tricky bridge, or slowing down a fast passage to learn it.
 
+[Try it out!](https://christianhanvey.github.io/youtube-jam-buddy/)
+
 ## Features
 
 - Multiple playlists, each with its own title — switch between them from the sidebar, which also shows each playlist's video count.

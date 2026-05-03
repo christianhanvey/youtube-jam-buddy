@@ -77,7 +77,9 @@
       background: var(--panel);
       border-color: var(--success);
     }
-    .new-list-btn {
+    .new-list-btn,
+    .export-btn,
+    .import-btn {
       width: 100%;
       text-align: left;
       background: transparent;
@@ -90,7 +92,9 @@
       font-family: inherit;
       margin-top: 8px;
     }
-    .new-list-btn:hover {
+    .new-list-btn:hover,
+    .export-btn:hover,
+    .import-btn:hover {
       color: var(--accent);
       border-color: var(--accent);
     }
@@ -425,6 +429,8 @@
       <h3 class="sidebar-title">Jam Playlists</h3>
       <ul class="playlist-list" id="playlistList"></ul>
       <button type="button" class="new-list-btn" id="newListBtn">+ New playlist</button>
+      <button type="button" class="export-btn" id="exportListBtn">Export</button>
+      <button type="button" class="import-btn" id="importListBtn">Import</button>
     </aside>
     <main>
     <section class="player-area" id="playerArea" hidden>
@@ -629,6 +635,8 @@
     const listHeader = document.getElementById("listHeader");
     const playlistList = document.getElementById("playlistList");
     const newListBtn = document.getElementById("newListBtn");
+    const exportListBtn = document.getElementById("exportListBtn");
+    const importListBtn = document.getElementById("importListBtn");
     const emptyEl = document.getElementById("empty");
     const jamBtn = document.getElementById("jamBtn");
     const playerArea = document.getElementById("playerArea");
@@ -1222,6 +1230,115 @@
     jamBtn.addEventListener("click", startJam);
     stopJamBtn.addEventListener("click", stopJam);
     newListBtn.addEventListener("click", createList);
+    exportListBtn.addEventListener("click", exportActiveList);
+    importListBtn.addEventListener("click", importLists);
+
+    async function importLists() {
+      let file = null;
+      if (window.showOpenFilePicker) {
+        try {
+          const [handle] = await window.showOpenFilePicker({
+            multiple: false,
+            types: [{ description: "JSON file", accept: { "application/json": [".json"] } }],
+          });
+          file = await handle.getFile();
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+          setStatus(`Could not open file: ${err && err.message ? err.message : err}`, "error");
+          return;
+        }
+      } else {
+        file = await new Promise((resolve) => {
+          const inp = document.createElement("input");
+          inp.type = "file";
+          inp.accept = "application/json,.json";
+          inp.addEventListener("change", () => resolve(inp.files && inp.files[0] || null));
+          inp.click();
+        });
+        if (!file) return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch {
+        setStatus("Could not import: file is not valid JSON.", "error");
+        return;
+      }
+
+      // Accept either { lists: [...] } or a single { title, videos } object.
+      const incoming = Array.isArray(parsed?.lists)
+        ? parsed.lists
+        : (parsed && Array.isArray(parsed.videos) ? [parsed] : null);
+      if (!incoming || incoming.length === 0) {
+        setStatus("Could not import: no playlists found in file.", "error");
+        return;
+      }
+
+      // Sync working copies into the active list before mutating `lists`.
+      const active = lists.find((l) => l.id === activeId);
+      if (active) {
+        active.videos = videos;
+        active.title = listTitle;
+      }
+
+      const normalized = incoming.map((l) => ({
+        id: newListId(),
+        title: typeof l?.title === "string" && l.title ? l.title : DEFAULT_LIST_TITLE,
+        videos: Array.isArray(l?.videos) ? l.videos : [],
+      }));
+      lists.push(...normalized);
+
+      if (!saveList()) return;
+      setStatus(
+        `Imported ${normalized.length} playlist${normalized.length === 1 ? "" : "s"}.`,
+        "success"
+      );
+      render();
+    }
+
+    async function exportActiveList() {
+      // Sync working copies into the active list before exporting.
+      const active = lists.find((l) => l.id === activeId);
+      if (active) {
+        active.videos = videos;
+        active.title = listTitle;
+      }
+
+      const data = { lists: lists.map((l) => ({ id: l.id, title: l.title, videos: l.videos })) };
+      const json = JSON.stringify(data, null, 2);
+      const filename = "jam-playlists.json";
+      const successMsg = `Exported ${lists.length} playlist${lists.length === 1 ? "" : "s"}.`;
+
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{ description: "JSON file", accept: { "application/json": [".json"] } }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(new Blob([json], { type: "application/json" }));
+          await writable.close();
+          setStatus(successMsg, "success");
+          return;
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+          setStatus(`Could not export: ${err && err.message ? err.message : err}`, "error");
+          return;
+        }
+      }
+
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus(successMsg, "success");
+    }
 
     jamPrevBtn.addEventListener("click", () => {
       if (!jamPlayer || jamIndex <= 0) return;
