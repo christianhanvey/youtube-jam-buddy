@@ -13,12 +13,12 @@ All settings and modifications to the list should be stored in the browser so if
 
 ## Jam Playlist
 - A Jam Playlist is a simple list of jam videos
-- A Jam Playlist can be given a name
+- A Jam Playlist can be given a title
 - A user can have multiple jam playlists
 
 ## Jam Video
 - Each jam video has the following
-    - a customisable name (default is taken from the youtube video title)
+    - a customisable title (default is taken from the youtube video title)
     - a youtube url 
     - a playback start time (default is start of video)
     - a playback end time (default is end of video)

@@ -5,7 +5,7 @@ Single-file SPA for building YouTube playlists tuned for jamming/practice (custo
 ## Shape of the project
 
 - Everything lives in `index.html` — HTML, CSS, and JS in one file. No build step, no bundler, no dependencies.
-- All state is stored in `localStorage` under the key `yjb.videos.v1`. No backend, ever — that's a hard requirement from the spec.
+- All state is stored in `localStorage` under the key `yjb.list.v1` as `{ title: string, videos: Video[] }`. No backend, ever — that's a hard requirement from the spec.
 - The only external runtime dependency is the YouTube IFrame API, loaded on demand when the user starts the jam player.
 - Video metadata is fetched via the public YouTube oEmbed endpoint (no API key needed).
 

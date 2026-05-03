@@ -201,6 +201,38 @@
       outline: none;
       border-color: var(--accent);
     }
+    .list-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .list-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      flex: 1;
+      word-break: break-word;
+    }
+    .list-header form {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      align-items: center;
+    }
+    .list-header form input {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .list-header form input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
     .empty {
       color: var(--muted);
       font-size: 14px;
@@ -349,35 +381,43 @@
 
     <button type="button" class="jam-btn" id="jamBtn" hidden>Let's Jam</button>
 
+    <div class="list-header" id="listHeader"></div>
     <ul class="list" id="list"></ul>
     <div class="empty" id="empty" hidden>No videos yet. Add one above to get started.</div>
   </main>
 
   <script>
-    const STORAGE_KEY = "yjb.videos.v1";
+    const STORAGE_KEY = "yjb.list.v1";
+    const DEFAULT_LIST_TITLE = "My Jam List";
     const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // --- State ---
-    let videos = loadVideos();
+    const initialList = loadList();
+    let videos = initialList.videos;
+    let listTitle = initialList.title;
     let editingId = null;
+    let editingTitle = false;
     let draggedId = null;
     let dropTargetId = null;
     let dropPosition = null;
 
-    function loadVideos() {
+    function loadList() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
+        if (!raw) return { title: DEFAULT_LIST_TITLE, videos: [] };
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        return {
+          title: typeof parsed?.title === "string" && parsed.title ? parsed.title : DEFAULT_LIST_TITLE,
+          videos: Array.isArray(parsed?.videos) ? parsed.videos : [],
+        };
       } catch {
-        return [];
+        return { title: DEFAULT_LIST_TITLE, videos: [] };
       }
     }
 
-    function saveVideos() {
+    function saveList() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(videos));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ title: listTitle, videos }));
         return true;
       } catch (err) {
         const isQuota =
@@ -393,7 +433,9 @@
             : `Could not save: ${err && err.message ? err.message : err}`,
           "error"
         );
-        videos = loadVideos();
+        const restored = loadList();
+        videos = restored.videos;
+        listTitle = restored.title;
         render();
         return false;
       }
@@ -468,6 +510,7 @@
 
     // --- Rendering ---
     const listEl = document.getElementById("list");
+    const listHeader = document.getElementById("listHeader");
     const emptyEl = document.getElementById("empty");
     const jamBtn = document.getElementById("jamBtn");
     const playerArea = document.getElementById("playerArea");
@@ -487,6 +530,7 @@
     }
 
     function render() {
+      renderListHeader();
       listEl.replaceChildren();
       const hasVideos = videos.length > 0;
       emptyEl.hidden = hasVideos;
@@ -494,6 +538,59 @@
       for (const v of videos) {
         listEl.appendChild(renderItem(v));
       }
+    }
+
+    function renderListHeader() {
+      listHeader.replaceChildren();
+
+      if (!editingTitle) {
+        const titleEl = document.createElement("h2");
+        titleEl.textContent = listTitle;
+
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => { editingTitle = true; render(); });
+
+        actions.append(editBtn);
+        listHeader.append(titleEl, actions);
+        return;
+      }
+
+      const form = document.createElement("form");
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = listTitle;
+      input.required = true;
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "submit";
+      saveBtn.className = "primary";
+      saveBtn.textContent = "Save";
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => { editingTitle = false; render(); });
+
+      actions.append(saveBtn, cancelBtn);
+      form.append(input, actions);
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        listTitle = input.value.trim() || DEFAULT_LIST_TITLE;
+        saveList();
+        editingTitle = false;
+        render();
+      });
+
+      listHeader.appendChild(form);
     }
 
     function renderItem(v) {
@@ -573,7 +670,7 @@
       if (!before) toIdx += 1;
       next.splice(toIdx, 0, moved);
       videos = next;
-      if (!saveVideos()) return;
+      if (!saveList()) return;
       render();
     }
 
@@ -749,7 +846,7 @@
             ? { ...x, title: newTitle, playbackRate: newRate, volume: newVolume, startSeconds: startSec, endSeconds: endSec }
             : x
         );
-        if (!saveVideos()) return;
+        if (!saveList()) return;
         if (isVideoCurrentlyPlaying(v.videoId)) {
           try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
           try { jamPlayer.setVolume(newVolume); } catch (_) {}
@@ -766,7 +863,7 @@
     function removeVideo(id) {
       videos = videos.filter((v) => v.id !== id);
       if (editingId === id) editingId = null;
-      saveVideos();
+      saveList();
       render();
     }
 
@@ -892,7 +989,7 @@
       videos = videos.map((x) =>
         x.id === current.id ? { ...x, playbackRate: newRate } : x
       );
-      saveVideos();
+      saveList();
       try { jamPlayer.setPlaybackRate(newRate); } catch (_) {}
       if (editingId === null) render();
     });
@@ -910,7 +1007,7 @@
     });
 
     jamVolumeSlider.addEventListener("change", () => {
-      saveVideos();
+      saveList();
       if (editingId === null) render();
     });
 
@@ -956,7 +1053,7 @@
           addedAt: new Date().toISOString(),
         };
         videos.push(entry);
-        if (!saveVideos()) return;
+        if (!saveList()) return;
         render();
         input.value = "";
         setStatus(`Added "${title}".`, "success");
