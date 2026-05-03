@@ -31,11 +31,17 @@ All settings and modifications to the list should be stored in the browser so if
 # App Features
 The app allows the user to enter youtube video urls to build a playlist
 The user can create multiple playlists
-The user can add custom playback options for each video 
+    - A sidebar lists every playlist by title; clicking a title switches to that playlist
+    - The user can create a new playlist via a "+ New playlist" button in the sidebar
+    - The user can delete a playlist (only when more than one exists); deleting the active playlist switches to the next one
+    - Switching playlists stops any in-progress jam (the queue belongs to the previous playlist)
+The user can add custom playback options for each video
     - custom playback start and end points
-    - custom playback speed    
+    - custom playback speed
+    - custom playback volume
 If the app has not been used before, the user should start with a single default jam playlist that is empty
 If the jam playlist is empty, an entry field for adding the youtube video url of the first jam video should exist
+The "Let's Jam" button reads "Let's Jam to {title}" when the active playlist has been renamed; otherwise it reads just "Let's Jam"
 
 # App Modes
 The app should have two main modes:

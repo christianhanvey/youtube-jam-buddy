@@ -23,10 +23,80 @@
       color: var(--text);
       min-height: 100vh;
     }
-    main {
-      max-width: 760px;
+    .layout {
+      display: flex;
+      gap: 24px;
+      max-width: 1000px;
       margin: 0 auto;
       padding: 32px 20px 80px;
+    }
+    .sidebar {
+      width: 200px;
+      flex-shrink: 0;
+    }
+    .sidebar-title {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .playlist-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .playlist-list button {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      word-break: break-word;
+      font-family: inherit;
+    }
+    .playlist-list button:hover {
+      background: var(--panel);
+    }
+    .playlist-list button.active {
+      background: var(--panel);
+      border-color: var(--accent);
+    }
+    .new-list-btn {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: inherit;
+      margin-top: 8px;
+    }
+    .new-list-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    main {
+      flex: 1;
+      min-width: 0;
+    }
+    @media (max-width: 800px) {
+      .layout {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: auto;
+      }
     }
     h1 {
       margin: 0 0 4px;
@@ -342,7 +412,13 @@
   </style>
 </head>
 <body>
-  <main>
+  <div class="layout">
+    <aside class="sidebar">
+      <h3 class="sidebar-title">Playlists</h3>
+      <ul class="playlist-list" id="playlistList"></ul>
+      <button type="button" class="new-list-btn" id="newListBtn">+ New playlist</button>
+    </aside>
+    <main>
     <section class="player-area" id="playerArea" hidden>
       <div class="player-header">
         <strong id="playerNowPlaying">Now jamming</strong>
@@ -384,7 +460,8 @@
     <div class="list-header" id="listHeader"></div>
     <ul class="list" id="list"></ul>
     <div class="empty" id="empty" hidden>No videos yet. Add one above to get started.</div>
-  </main>
+    </main>
+  </div>
 
   <script>
     const STORAGE_KEY = "yjb.lists.v1";
@@ -542,6 +619,8 @@
     // --- Rendering ---
     const listEl = document.getElementById("list");
     const listHeader = document.getElementById("listHeader");
+    const playlistList = document.getElementById("playlistList");
+    const newListBtn = document.getElementById("newListBtn");
     const emptyEl = document.getElementById("empty");
     const jamBtn = document.getElementById("jamBtn");
     const playerArea = document.getElementById("playerArea");
@@ -561,14 +640,100 @@
     }
 
     function render() {
+      renderSidebar();
       renderListHeader();
       listEl.replaceChildren();
       const hasVideos = videos.length > 0;
       emptyEl.hidden = hasVideos;
       jamBtn.hidden = !hasVideos;
+      jamBtn.textContent = listTitle === DEFAULT_LIST_TITLE
+        ? "Let's Jam"
+        : `Let's Jam to ${listTitle}`;
       for (const v of videos) {
         listEl.appendChild(renderItem(v));
       }
+    }
+
+    function renderSidebar() {
+      playlistList.replaceChildren();
+      for (const list of lists) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = list.title;
+        if (list.id === activeId) btn.classList.add("active");
+        btn.addEventListener("click", () => switchActiveList(list.id));
+        li.appendChild(btn);
+        playlistList.appendChild(li);
+      }
+    }
+
+    function switchActiveList(id) {
+      if (id === activeId) return;
+      const next = lists.find((l) => l.id === id);
+      if (!next) return;
+
+      const currentActive = lists.find((l) => l.id === activeId);
+      if (currentActive) {
+        currentActive.videos = videos;
+        currentActive.title = listTitle;
+      }
+
+      activeId = id;
+      videos = next.videos;
+      listTitle = next.title;
+      editingId = null;
+      editingTitle = false;
+
+      if (jamPlayer) stopJam();
+
+      saveList();
+      render();
+    }
+
+    function createList() {
+      const currentActive = lists.find((l) => l.id === activeId);
+      if (currentActive) {
+        currentActive.videos = videos;
+        currentActive.title = listTitle;
+      }
+
+      const id = newListId();
+      const created = { id, title: DEFAULT_LIST_TITLE, videos: [] };
+      lists.push(created);
+      activeId = id;
+      videos = created.videos;
+      listTitle = created.title;
+      editingId = null;
+      editingTitle = false;
+
+      if (jamPlayer) stopJam();
+
+      saveList();
+      render();
+    }
+
+    function deleteList(id) {
+      const list = lists.find((l) => l.id === id);
+      if (!list) return;
+      if (!confirm(`Delete "${list.title}"?`)) return;
+
+      const wasActive = id === activeId;
+      const idx = lists.findIndex((l) => l.id === id);
+      lists.splice(idx, 1);
+
+      if (wasActive) {
+        const nextActive = lists[Math.min(idx, lists.length - 1)];
+        activeId = nextActive.id;
+        videos = nextActive.videos;
+        listTitle = nextActive.title;
+        editingId = null;
+        editingTitle = false;
+        if (jamPlayer) stopJam();
+      }
+
+      saveList();
+      render();
     }
 
     function renderListHeader() {
@@ -587,6 +752,16 @@
         editBtn.addEventListener("click", () => { editingTitle = true; render(); });
 
         actions.append(editBtn);
+
+        if (lists.length > 1) {
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "danger";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", () => deleteList(activeId));
+          actions.append(deleteBtn);
+        }
+
         listHeader.append(titleEl, actions);
         return;
       }
@@ -998,6 +1173,7 @@
 
     jamBtn.addEventListener("click", startJam);
     stopJamBtn.addEventListener("click", stopJam);
+    newListBtn.addEventListener("click", createList);
 
     jamPrevBtn.addEventListener("click", () => {
       if (!jamPlayer || jamIndex <= 0) return;

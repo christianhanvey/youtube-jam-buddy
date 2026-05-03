@@ -26,8 +26,8 @@ Then open `http://localhost:8080`. There is no test suite, no linter, no CI.
 
 - Keep it a single file. Don't introduce a build step, npm, or a framework without explicit ask.
 - Don't add a backend, server-side storage, or anything that requires a YouTube API key.
-- Persist state through `saveVideos()` so quota-exceeded errors are handled and the in-memory state stays consistent with `localStorage`.
+- Persist state through `saveList()` so quota-exceeded errors are handled and the in-memory state stays consistent with `localStorage`.
 
 ## Known gaps vs. the spec
 
-The spec describes multiple named playlists and explicit Playback/Edit modes. The current code implements a single implicit playlist and shows both modes at once. Don't assume those features exist when reading the code.
+The spec describes explicit Playback / Edit / Edit Video modes. The current code shows the playlist and its editing controls as one combined view — there's no mode toggle. Multi-playlist support (sidebar with create/switch/delete) is implemented.
