@@ -387,37 +387,65 @@
   </main>
 
   <script>
-    const STORAGE_KEY = "yjb.list.v1";
+    const STORAGE_KEY = "yjb.lists.v1";
     const DEFAULT_LIST_TITLE = "My Jam List";
     const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
     // --- State ---
-    const initialList = loadList();
-    let videos = initialList.videos;
-    let listTitle = initialList.title;
+    // Storage shape: { activeId, lists: [{ id, title, videos }] }
+    // `videos` and `listTitle` are working copies of the active list; saveList
+    // syncs them back into the active list entry before writing.
+    const initialState = loadState();
+    let lists = initialState.lists;
+    let activeId = initialState.activeId;
+    const initialActive = lists.find((l) => l.id === activeId) || lists[0];
+    let videos = initialActive.videos;
+    let listTitle = initialActive.title;
     let editingId = null;
     let editingTitle = false;
     let draggedId = null;
     let dropTargetId = null;
     let dropPosition = null;
 
-    function loadList() {
+    function newListId() {
+      return `list-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function defaultState() {
+      const id = newListId();
+      return { activeId: id, lists: [{ id, title: DEFAULT_LIST_TITLE, videos: [] }] };
+    }
+
+    function loadState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return { title: DEFAULT_LIST_TITLE, videos: [] };
+        if (!raw) return defaultState();
         const parsed = JSON.parse(raw);
-        return {
-          title: typeof parsed?.title === "string" && parsed.title ? parsed.title : DEFAULT_LIST_TITLE,
-          videos: Array.isArray(parsed?.videos) ? parsed.videos : [],
-        };
+        if (!parsed || !Array.isArray(parsed.lists) || parsed.lists.length === 0) {
+          return defaultState();
+        }
+        const lists = parsed.lists.map((l) => ({
+          id: typeof l?.id === "string" && l.id ? l.id : newListId(),
+          title: typeof l?.title === "string" && l.title ? l.title : DEFAULT_LIST_TITLE,
+          videos: Array.isArray(l?.videos) ? l.videos : [],
+        }));
+        const activeId = typeof parsed.activeId === "string" && lists.some((l) => l.id === parsed.activeId)
+          ? parsed.activeId
+          : lists[0].id;
+        return { activeId, lists };
       } catch {
-        return { title: DEFAULT_LIST_TITLE, videos: [] };
+        return defaultState();
       }
     }
 
     function saveList() {
+      const active = lists.find((l) => l.id === activeId);
+      if (active) {
+        active.videos = videos;
+        active.title = listTitle;
+      }
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ title: listTitle, videos }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeId, lists }));
         return true;
       } catch (err) {
         const isQuota =
@@ -433,9 +461,12 @@
             : `Could not save: ${err && err.message ? err.message : err}`,
           "error"
         );
-        const restored = loadList();
-        videos = restored.videos;
-        listTitle = restored.title;
+        const restored = loadState();
+        lists = restored.lists;
+        activeId = restored.activeId;
+        const restoredActive = lists.find((l) => l.id === activeId);
+        videos = restoredActive ? restoredActive.videos : [];
+        listTitle = restoredActive ? restoredActive.title : DEFAULT_LIST_TITLE;
         render();
         return false;
       }
