@@ -52,7 +52,7 @@ Design review of `index.html`, grouped by priority and area.
 ### Performance
 
 28. **Whole-list DOM rebuild on every state change** via `listEl.replaceChildren()` + loop (index.html:875-884). Fine at 10 items, noticeable at 200+.
-29. **Inline styles set imperatively in the edit form** (index.html:1236-1238, 1252-1254, 1268-1271) — same 3-line flex block 3×; belongs in CSS.
+29. **DONE.** **Inline styles set imperatively in the edit form** (index.html:1236-1238, 1252-1254, 1268-1271) — same 3-line flex block 3×; belongs in CSS. *Added `.edit-form label.edit-field` rule and replaced the 9 inline style assignments with `className = "edit-field"`.*
 30. **`document.querySelectorAll(".drop-above, .drop-below, ...")` on every dragover** (index.html:1106). `dropTargetId` already tells you which row to clear.
 31. **`localStorage.setItem` on every micro-change** — volume slider `change`, speed select, drag drop, add, edit each writes the whole `lists` blob. With many/large playlists, a debounced or batched save would help.
 

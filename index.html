@@ -445,6 +445,11 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+    .edit-form label.edit-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
     .edit-form input,
     .edit-form select {
       padding: 8px 10px;
@@ -1381,9 +1386,7 @@
       form.className = "edit-form";
 
       const titleLabel = document.createElement("label");
-      titleLabel.style.display = "flex";
-      titleLabel.style.flexDirection = "column";
-      titleLabel.style.gap = "4px";
+      titleLabel.className = "edit-field";
       const titleLabelText = document.createElement("span");
       titleLabelText.textContent = "Title";
       const titleInput = document.createElement("input");
@@ -1397,9 +1400,7 @@
       titleRow.append(titleLabel);
 
       const speedLabel = document.createElement("label");
-      speedLabel.style.display = "flex";
-      speedLabel.style.flexDirection = "column";
-      speedLabel.style.gap = "4px";
+      speedLabel.className = "edit-field";
       const speedLabelText = document.createElement("span");
       speedLabelText.textContent = "Playback speed";
       const speedSelect = document.createElement("select");
@@ -1414,9 +1415,7 @@
       speedLabel.append(speedLabelText, speedSelect);
 
       const volumeLabel = document.createElement("label");
-      volumeLabel.style.display = "flex";
-      volumeLabel.style.flexDirection = "column";
-      volumeLabel.style.gap = "4px";
+      volumeLabel.className = "edit-field";
       const volumeLabelText = document.createElement("span");
       const currentVolume = typeof v.volume === "number" ? v.volume : 100;
       volumeLabelText.textContent = `Volume — ${currentVolume}%`;
