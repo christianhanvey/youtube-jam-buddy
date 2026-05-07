@@ -676,14 +676,40 @@
   </div>
 
   <script>
+    /**
+     * @typedef {Object} JamVideo
+     * @property {string} id          Local entry id (distinct from the YouTube videoId).
+     * @property {string} videoId     YouTube 11-char video id.
+     * @property {string} url         Original URL the user pasted.
+     * @property {string} title       Display title (defaults to the oEmbed title).
+     * @property {string} addedAt     ISO timestamp.
+     * @property {number} [playbackRate] Speed multiplier; absent or 1 means normal.
+     * @property {number} [volume]    0–100; absent means 100.
+     * @property {?number} [startSeconds] Trimmed start; null/absent means from the beginning.
+     * @property {?number} [endSeconds]   Trimmed end; null/absent means play to the end.
+     */
+
+    /**
+     * @typedef {Object} JamList
+     * @property {string}     id
+     * @property {string}     title
+     * @property {JamVideo[]} videos
+     */
+
+    /**
+     * @typedef {Object} StorageShape  Persisted under localStorage key `yjb.lists.v1`.
+     * @property {string}     activeId      Id of the currently selected list.
+     * @property {JamList[]}  lists         All playlists; never empty after loadState().
+     * @property {boolean}    loopPlaylist  Whether playback wraps from the last item to the first.
+     */
+
+    // --- State ---
     const STORAGE_KEY = "yjb.lists.v1";
     const DEFAULT_LIST_TITLE = "My Jam List";
     const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-    // --- State ---
-    // Storage shape: { activeId, lists: [{ id, title, videos }], loopPlaylist }
-    // `videos` and `listTitle` are working copies of the active list; saveList
-    // syncs them back into the active list entry before writing.
+    // `videos` and `listTitle` are working copies of the active list;
+    // syncActive() / saveList() flush them back into the active list entry.
     const initialState = loadState();
     let lists = initialState.lists;
     let activeId = initialState.activeId;
@@ -698,6 +724,7 @@
     let dropPosition = null;
     let keyboardGrabbedId = null;
 
+    // --- Storage helpers ---
     function newListId() {
       return `list-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
@@ -846,7 +873,7 @@
       return { videoId, title: data.title || videoId };
     }
 
-    // --- Rendering ---
+    // --- DOM refs ---
     const listEl = document.getElementById("list");
     const listHeader = document.getElementById("listHeader");
     const playlistList = document.getElementById("playlistList");
@@ -869,6 +896,7 @@
     const jamOverflowBtn = document.getElementById("jamOverflowBtn");
     const jamSecondaryControls = document.getElementById("jamSecondaryControls");
 
+    // --- Overflow menu ---
     function closeJamOverflow() {
       jamSecondaryControls.classList.remove("open");
       jamOverflowBtn.setAttribute("aria-expanded", "false");
@@ -888,9 +916,17 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      if (!jamSecondaryControls.classList.contains("open")) return;
-      closeJamOverflow();
-      jamOverflowBtn.focus();
+      if (jamSecondaryControls.classList.contains("open")) {
+        closeJamOverflow();
+        jamOverflowBtn.focus();
+      }
+      // Safety net: dragend usually clears these, but if the source row
+      // is removed mid-drag (e.g. by a render) it can fail to fire.
+      if (draggedId) {
+        draggedId = null;
+        clearDropIndicators();
+        document.querySelectorAll("li.item.dragging").forEach((el) => el.classList.remove("dragging"));
+      }
     });
 
     for (const s of SPEEDS) {
@@ -900,6 +936,7 @@
       jamSpeedSelect.appendChild(opt);
     }
 
+    // --- Render ---
     function render() {
       if (keyboardGrabbedId !== null && !videos.some((v) => v.id === keyboardGrabbedId)) {
         keyboardGrabbedId = null;
@@ -1099,6 +1136,7 @@
       return li;
     }
 
+    // --- Keyboard reorder ---
     function attachKeyboardReorder(handle, v) {
       handle.addEventListener("click", (e) => {
         e.preventDefault();
@@ -1172,6 +1210,7 @@
       if (handle) handle.focus();
     }
 
+    // --- Drag and drop ---
     function attachDragHandlers(li, v) {
       li.addEventListener("dragstart", (e) => {
         if (!li.draggable) return;
@@ -1266,6 +1305,7 @@
       render();
     }
 
+    // --- View / edit forms ---
     function renderViewMeta(v) {
       const frag = document.createDocumentFragment();
 
@@ -1627,6 +1667,7 @@
       updateNavButtons();
     }
 
+    // --- Top-level button bindings ---
     jamBtn.addEventListener("click", () => startJam(0));
     stopJamBtn.addEventListener("click", stopJam);
     newListBtn.addEventListener("click", createList);
@@ -1638,6 +1679,7 @@
       updateNavButtons();
     });
 
+    // --- Import / export ---
     async function importLists() {
       let file = null;
       if (window.showOpenFilePicker) {
@@ -1735,6 +1777,7 @@
       setStatus(successMsg, "success");
     }
 
+    // --- Player control bindings ---
     jamPrevBtn.addEventListener("click", () => {
       if (!jamPlayer || jamIndex <= 0) return;
       jamIndex -= 1;
