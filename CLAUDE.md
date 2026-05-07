@@ -28,6 +28,3 @@ Then open `http://localhost:8080`. There is no test suite, no linter, no CI.
 - Don't add a backend, server-side storage, or anything that requires a YouTube API key.
 - Persist state through `saveList()` so quota-exceeded errors are handled and the in-memory state stays consistent with `localStorage`.
 
-## Known gaps vs. the spec
-
-The spec describes explicit Playback / Edit / Edit Video modes. The current code shows the playlist and its editing controls as one combined view — there's no mode toggle. Multi-playlist support (sidebar with create/switch/delete) is implemented.

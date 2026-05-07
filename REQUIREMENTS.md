@@ -43,22 +43,29 @@ If the app has not been used before, the user should start with a single default
 If the jam playlist is empty, an entry field for adding the youtube video url of the first jam video should exist
 The "Let's Jam" button reads "Let's Jam to {title}" when the active playlist has been renamed; otherwise it reads just "Let's Jam"
 
-# App Modes
-The app should have two main modes:
-    - Playback mode
-    - Edit modes
-When the app starts, if an existing list is detected, the default mode should be Playback.
-If no list exists, the default mode is Edit  
+# UI
 
-## Playback Mode
-The user selects a list (the first is loaded by default) and presses a play button which starts replay of all videos in sequence
+The app uses a single combined view rather than discrete modes. Editing is inline: pressing **Edit** on a row swaps the row's metadata for an inline form; pressing **Edit** on the playlist title swaps the title heading for an inline form. There is no separate "Playback Mode" — the playlist remains visible and editable while a jam is in progress.
 
-## Edit Playlist Mode
-The user can create a new playlist or edit an existing playlist
-When editing a playlist the user has access to re-order the you videos in the list
+## Layout
+- **Sidebar** (left) — list of playlists with active highlight, "+ New playlist", Loop-playlist toggle, Export / Import.
+- **Main column** — H1, "Let's Jam" button, sticky player area (only while jamming), playlist title + Edit/Delete actions, add-URL form, and the list of jam videos.
 
-## Edit Video Mode
-When editing a video, the user has access to change the title, url, playback start, playback end and playback speed properties
+## Playlist editing
+- Click **Edit** next to the playlist title to rename it inline.
+- Click **+ New playlist** to create a new empty playlist; it becomes active.
+- Click **Delete** next to the playlist title to delete the active playlist (only available when more than one exists).
+- Drag a video row's handle to reorder within the playlist, or drop it onto a sidebar entry to move it to that playlist. Keyboard equivalent: focus the handle, press **Space** to pick up, **↑ / ↓** to move within the list, **Space** again to drop, **Escape** to cancel.
+
+## Video editing
+- Click **Edit** on a video row to inline-edit its title, playback speed, volume, and start/end times.
+- Click **Remove** to delete the video from the active playlist.
+- Click **▶ Play** to start the jam at that video.
+
+## Playback
+- The **Let's Jam** button starts the jam from the first video in the active playlist.
+- During a jam, a sticky player at the top of the main column shows the current video, current title, Prev / Next / Stop, and Speed / Volume controls (which write back to the active video's settings).
+- When the playlist ends, playback stops unless **Loop playlist** is enabled in the sidebar settings.
 
 
 ### TEST DATA - SAFE TO IGNORE THE BELOW

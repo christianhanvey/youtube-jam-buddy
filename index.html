@@ -312,9 +312,13 @@
     li.item.dragging { opacity: 0.4; }
     li.item.drop-above { box-shadow: 0 -3px 0 0 var(--accent); }
     li.item.drop-below { box-shadow: 0 3px 0 0 var(--accent); }
-    .drag-handle {
+    button.drag-handle {
       cursor: grab;
       color: var(--muted);
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 0;
+      font-family: inherit;
       user-select: none;
       font-size: 14px;
       line-height: 1;
@@ -324,13 +328,24 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      border-radius: 4px;
     }
-    .drag-handle:hover { color: var(--text); }
-    li.item.dragging .drag-handle { cursor: grabbing; }
-    li.item[draggable="false"] .drag-handle { cursor: default; opacity: 0.3; }
+    button.drag-handle:hover { color: var(--text); }
+    button.drag-handle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      color: var(--text);
+    }
+    button.drag-handle.grabbed {
+      background: var(--accent);
+      color: #fff;
+      cursor: grabbing;
+    }
+    li.item.dragging button.drag-handle { cursor: grabbing; }
+    li.item[draggable="false"] button.drag-handle { cursor: default; opacity: 0.3; }
     @media (max-width: 600px) {
       li.item { grid-template-columns: 1fr; }
-      .drag-handle { display: none; }
+      button.drag-handle { display: none; }
     }
     li.item .item-thumb {
       width: 100%;
@@ -636,7 +651,7 @@
       />
       <button type="submit" id="addBtn">Add</button>
     </form>
-    <div class="status info" id="status"></div>
+    <div class="status info" id="status" role="status" aria-live="polite"></div>
     <ul class="list" id="list"></ul>
     <div class="empty" id="empty" hidden>No videos yet. Add one above to get started.</div>
     </main>
@@ -681,6 +696,7 @@
     let draggedId = null;
     let dropTargetId = null;
     let dropPosition = null;
+    let keyboardGrabbedId = null;
 
     function newListId() {
       return `list-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -713,12 +729,17 @@
       }
     }
 
-    function saveList() {
+    function syncActive() {
       const active = lists.find((l) => l.id === activeId);
       if (active) {
         active.videos = videos;
         active.title = listTitle;
       }
+      return active;
+    }
+
+    function saveList() {
+      syncActive();
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeId, lists, loopPlaylist }));
         return true;
@@ -807,7 +828,17 @@
     async function verifyVideo(videoId) {
       const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
       const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`;
-      const res = await fetch(oembedUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      let res;
+      try {
+        res = await fetch(oembedUrl, { signal: controller.signal });
+      } catch (err) {
+        if (err && err.name === "AbortError") throw new Error("Verification timed out");
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!res.ok) {
         throw new Error(res.status === 401 ? "Video is private" : "Video not found");
       }
@@ -870,6 +901,9 @@
     }
 
     function render() {
+      if (keyboardGrabbedId !== null && !videos.some((v) => v.id === keyboardGrabbedId)) {
+        keyboardGrabbedId = null;
+      }
       renderSidebar();
       renderListHeader();
       listEl.replaceChildren();
@@ -911,11 +945,7 @@
       const next = lists.find((l) => l.id === id);
       if (!next) return;
 
-      const currentActive = lists.find((l) => l.id === activeId);
-      if (currentActive) {
-        currentActive.videos = videos;
-        currentActive.title = listTitle;
-      }
+      syncActive();
 
       activeId = id;
       videos = next.videos;
@@ -930,11 +960,7 @@
     }
 
     function createList() {
-      const currentActive = lists.find((l) => l.id === activeId);
-      if (currentActive) {
-        currentActive.videos = videos;
-        currentActive.title = listTitle;
-      }
+      syncActive();
 
       const id = newListId();
       const created = { id, title: DEFAULT_LIST_TITLE, videos: [] };
@@ -1043,11 +1069,20 @@
       li.dataset.id = v.id;
       li.draggable = editingId !== v.id;
 
-      const handle = document.createElement("span");
+      const handle = document.createElement("button");
+      handle.type = "button";
       handle.className = "drag-handle";
-      handle.setAttribute("aria-hidden", "true");
-      handle.title = "Drag to reorder or move to another playlist";
+      handle.setAttribute("aria-label", `Reorder ${v.title}`);
+      handle.title = "Drag to reorder, or use space + arrow keys";
       handle.textContent = "⋮⋮";
+      handle.disabled = editingId === v.id;
+      if (keyboardGrabbedId === v.id) {
+        handle.classList.add("grabbed");
+        handle.setAttribute("aria-pressed", "true");
+      } else {
+        handle.setAttribute("aria-pressed", "false");
+      }
+      attachKeyboardReorder(handle, v);
 
       const thumb = document.createElement("img");
       thumb.className = "item-thumb";
@@ -1062,6 +1097,79 @@
       li.append(handle, thumb, meta);
       attachDragHandlers(li, v);
       return li;
+    }
+
+    function attachKeyboardReorder(handle, v) {
+      handle.addEventListener("click", (e) => {
+        e.preventDefault();
+        toggleKeyboardGrab(v.id);
+      });
+      handle.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          toggleKeyboardGrab(v.id);
+        } else if (e.key === "Escape" && keyboardGrabbedId === v.id) {
+          e.preventDefault();
+          cancelKeyboardGrab();
+        } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && keyboardGrabbedId === v.id) {
+          e.preventDefault();
+          keyboardMove(v.id, e.key === "ArrowUp" ? -1 : 1);
+        }
+      });
+      handle.addEventListener("blur", () => {
+        if (keyboardGrabbedId !== v.id) return;
+        keyboardGrabbedId = null;
+        handle.classList.remove("grabbed");
+        handle.setAttribute("aria-pressed", "false");
+      });
+    }
+
+    function toggleKeyboardGrab(id) {
+      if (keyboardGrabbedId === id) {
+        const v = videos.find((x) => x.id === id);
+        keyboardGrabbedId = null;
+        render();
+        focusHandle(id);
+        if (v) setStatus(`Dropped "${v.title}".`, "info");
+        return;
+      }
+      const v = videos.find((x) => x.id === id);
+      if (!v) return;
+      keyboardGrabbedId = id;
+      render();
+      focusHandle(id);
+      setStatus(`Picked up "${v.title}". Use ↑/↓ to move, space to drop, escape to cancel.`, "info");
+    }
+
+    function cancelKeyboardGrab() {
+      const id = keyboardGrabbedId;
+      keyboardGrabbedId = null;
+      if (id) {
+        render();
+        focusHandle(id);
+      }
+      setStatus("Move cancelled.", "info");
+    }
+
+    function keyboardMove(id, dir) {
+      const idx = videos.findIndex((x) => x.id === id);
+      if (idx === -1) return;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= videos.length) return;
+      const next = videos.slice();
+      const [moved] = next.splice(idx, 1);
+      next.splice(newIdx, 0, moved);
+      videos = next;
+      if (!saveList()) return;
+      render();
+      focusHandle(id);
+      setStatus(`Moved "${moved.title}" to ${newIdx + 1} of ${videos.length}.`, "info");
+    }
+
+    function focusHandle(id) {
+      const li = document.querySelector(`li.item[data-id="${CSS.escape(id)}"]`);
+      const handle = li && li.querySelector(".drag-handle");
+      if (handle) handle.focus();
     }
 
     function attachDragHandlers(li, v) {
@@ -1572,12 +1680,7 @@
         return;
       }
 
-      // Sync working copies into the active list before mutating `lists`.
-      const active = lists.find((l) => l.id === activeId);
-      if (active) {
-        active.videos = videos;
-        active.title = listTitle;
-      }
+      syncActive();
 
       const normalized = incoming.map((l) => ({
         id: newListId(),
@@ -1595,12 +1698,7 @@
     }
 
     async function exportActiveList() {
-      // Sync working copies into the active list before exporting.
-      const active = lists.find((l) => l.id === activeId);
-      if (active) {
-        active.videos = videos;
-        active.title = listTitle;
-      }
+      syncActive();
 
       const data = { lists: lists.map((l) => ({ id: l.id, title: l.title, videos: l.videos })) };
       const json = JSON.stringify(data, null, 2);
