@@ -16,6 +16,7 @@
       --success: #58d18b;
     }
     * { box-sizing: border-box; }
+    html { scrollbar-gutter: stable; }
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -195,6 +196,36 @@
     main {
       flex: 1;
       min-width: 0;
+      container-type: inline-size;
+    }
+    .secondary-controls { display: contents; }
+    .overflow-btn { display: none; }
+    @container (max-width: 600px) {
+      .overflow-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .secondary-controls {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 12px;
+        margin-top: 4px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px;
+        min-width: 220px;
+        z-index: 20;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      }
+      .secondary-controls.open { display: flex; }
+      .secondary-controls .speed-control,
+      .secondary-controls .volume-control { justify-content: space-between; }
     }
     @media (max-width: 800px) {
       .layout {
@@ -266,13 +297,13 @@
       margin: 0;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
     }
     li.item {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px;
+      padding: 16px;
       display: grid;
       grid-template-columns: 16px 240px 1fr;
       gap: 16px;
@@ -324,6 +355,11 @@
       color: var(--muted);
       font-size: 12px;
       word-break: break-all;
+      display: none;
+    }
+    li.item:hover .item-url,
+    li.item:focus-within .item-url {
+      display: block;
     }
     .item-actions {
       display: flex;
@@ -358,10 +394,18 @@
       margin-left: 6px;
       vertical-align: middle;
     }
-    .item-range {
-      font-size: 12px;
-      color: var(--muted);
+    .item-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .item-range,
+    .item-volume {
+      font-size: 13px;
+      color: var(--text);
       font-variant-numeric: tabular-nums;
+      font-weight: 500;
     }
     .edit-form-row {
       display: flex;
@@ -467,17 +511,26 @@
     }
     .player-header {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      flex-direction: column;
+      gap: 8px;
       padding: 8px 12px;
       background: var(--panel);
       border-bottom: 1px solid var(--border);
+      position: relative;
     }
-    .player-header strong { font-size: 14px; }
+    .player-header strong {
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
     .player-controls {
       display: flex;
       gap: 12px;
       align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
     .speed-control {
       display: flex;
@@ -542,6 +595,51 @@
 </head>
 <body>
   <div class="layout">
+    <main>
+    <h1>Youtube Jam Buddy</h1>
+    <p class="subtitle">Paste a YouTube URL to add it to your jam list. Saved locally in your browser.</p>
+
+    <section class="player-area" id="playerArea" hidden>
+      <div class="player-header">
+        <strong id="playerNowPlaying">Now jamming</strong>
+        <div class="player-controls">
+          <button type="button" class="overflow-btn" id="jamOverflowBtn" aria-label="More controls" aria-expanded="false" aria-controls="jamSecondaryControls">⋯</button>
+          <div class="secondary-controls" id="jamSecondaryControls">
+            <label class="speed-control">
+              <span>Speed</span>
+              <select id="jamSpeedSelect"></select>
+            </label>
+            <label class="volume-control">
+              <span>Vol</span>
+              <input type="range" id="jamVolumeSlider" min="0" max="100" value="100">
+              <span id="jamVolumeValue">100%</span>
+            </label>
+          </div>
+          <button type="button" id="jamPrevBtn" disabled>‹ Prev</button>
+          <button type="button" id="jamNextBtn" disabled>Next ›</button>
+          <button type="button" id="stopJamBtn">Stop</button>
+        </div>
+      </div>
+      <div id="playerMount"></div>
+    </section>
+
+    <button type="button" class="jam-btn" id="jamBtn" hidden>Let's Jam</button>
+
+    <div class="list-header" id="listHeader"></div>
+    <form class="add-form" id="addForm">
+      <input
+        type="url"
+        id="urlInput"
+        placeholder="https://www.youtube.com/watch?v=..."
+        autocomplete="off"
+        required
+      />
+      <button type="submit" id="addBtn">Add</button>
+    </form>
+    <div class="status info" id="status"></div>
+    <ul class="list" id="list"></ul>
+    <div class="empty" id="empty" hidden>No videos yet. Add one above to get started.</div>
+    </main>
     <aside class="sidebar">
       <h3 class="sidebar-title">Jam Playlists</h3>
       <ul class="playlist-list" id="playlistList"></ul>
@@ -560,49 +658,6 @@
         <button type="button" class="import-btn" id="importListBtn">Import</button>
       </div>
     </aside>
-    <main>
-    <section class="player-area" id="playerArea" hidden>
-      <div class="player-header">
-        <strong id="playerNowPlaying">Now jamming</strong>
-        <div class="player-controls">
-          <label class="speed-control">
-            Speed
-            <select id="jamSpeedSelect"></select>
-          </label>
-          <label class="volume-control">
-            Vol
-            <input type="range" id="jamVolumeSlider" min="0" max="100" value="100">
-            <span id="jamVolumeValue">100%</span>
-          </label>
-          <button type="button" id="jamPrevBtn" disabled>‹ Prev</button>
-          <button type="button" id="jamNextBtn" disabled>Next ›</button>
-          <button type="button" id="stopJamBtn">Stop</button>
-        </div>
-      </div>
-      <div id="playerMount"></div>
-    </section>
-
-    <h1>Youtube Jam Buddy</h1>
-    <p class="subtitle">Paste a YouTube URL to add it to your jam list. Saved locally in your browser.</p>
-
-    <form class="add-form" id="addForm">
-      <input
-        type="url"
-        id="urlInput"
-        placeholder="https://www.youtube.com/watch?v=..."
-        autocomplete="off"
-        required
-      />
-      <button type="submit" id="addBtn">Add</button>
-    </form>
-    <div class="status info" id="status"></div>
-
-    <button type="button" class="jam-btn" id="jamBtn" hidden>Let's Jam</button>
-
-    <div class="list-header" id="listHeader"></div>
-    <ul class="list" id="list"></ul>
-    <div class="empty" id="empty" hidden>No videos yet. Add one above to get started.</div>
-    </main>
   </div>
 
   <script>
@@ -780,6 +835,32 @@
     const jamSpeedSelect = document.getElementById("jamSpeedSelect");
     const jamVolumeSlider = document.getElementById("jamVolumeSlider");
     const jamVolumeValue = document.getElementById("jamVolumeValue");
+    const jamOverflowBtn = document.getElementById("jamOverflowBtn");
+    const jamSecondaryControls = document.getElementById("jamSecondaryControls");
+
+    function closeJamOverflow() {
+      jamSecondaryControls.classList.remove("open");
+      jamOverflowBtn.setAttribute("aria-expanded", "false");
+    }
+
+    jamOverflowBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = jamSecondaryControls.classList.toggle("open");
+      jamOverflowBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!jamSecondaryControls.classList.contains("open")) return;
+      if (jamSecondaryControls.contains(e.target) || jamOverflowBtn.contains(e.target)) return;
+      closeJamOverflow();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (!jamSecondaryControls.classList.contains("open")) return;
+      closeJamOverflow();
+      jamOverflowBtn.focus();
+    });
 
     for (const s of SPEEDS) {
       const opt = document.createElement("option");
@@ -1089,27 +1170,38 @@
         badge.textContent = `${v.playbackRate}×`;
         title.appendChild(badge);
       }
-      if (typeof v.volume === "number" && v.volume !== 100) {
-        const badge = document.createElement("span");
-        badge.className = "speed-badge";
-        badge.textContent = `${v.volume}%`;
-        title.appendChild(badge);
+
+      frag.append(title);
+
+      const hasRange = v.startSeconds != null || v.endSeconds != null;
+      const hasVolume = typeof v.volume === "number" && v.volume !== 100;
+      if (hasRange || hasVolume) {
+        const details = document.createElement("div");
+        details.className = "item-details";
+
+        if (hasRange) {
+          const range = document.createElement("span");
+          range.className = "item-range";
+          const start = v.startSeconds != null ? formatSecondsToTime(v.startSeconds) : "00:00:00";
+          const end = v.endSeconds != null ? formatSecondsToTime(v.endSeconds) : "end";
+          range.textContent = `${start} → ${end}`;
+          details.appendChild(range);
+        }
+
+        if (hasVolume) {
+          const volume = document.createElement("span");
+          volume.className = "item-volume";
+          volume.textContent = `Vol: ${v.volume}%`;
+          details.appendChild(volume);
+        }
+
+        frag.appendChild(details);
       }
 
       const urlEl = document.createElement("div");
       urlEl.className = "item-url";
       urlEl.textContent = v.url;
-
-      frag.append(title, urlEl);
-
-      if (v.startSeconds != null || v.endSeconds != null) {
-        const range = document.createElement("div");
-        range.className = "item-range";
-        const start = v.startSeconds != null ? formatSecondsToTime(v.startSeconds) : "00:00:00";
-        const end = v.endSeconds != null ? formatSecondsToTime(v.endSeconds) : "end";
-        range.textContent = `${start} → ${end}`;
-        frag.appendChild(range);
-      }
+      frag.append(urlEl);
 
       const actions = document.createElement("div");
       actions.className = "item-actions";
@@ -1141,15 +1233,27 @@
       form.className = "edit-form";
 
       const titleLabel = document.createElement("label");
-      titleLabel.textContent = "Title";
+      titleLabel.style.display = "flex";
+      titleLabel.style.flexDirection = "column";
+      titleLabel.style.gap = "4px";
+      const titleLabelText = document.createElement("span");
+      titleLabelText.textContent = "Title";
       const titleInput = document.createElement("input");
       titleInput.type = "text";
       titleInput.value = v.title;
       titleInput.required = true;
-      titleLabel.appendChild(titleInput);
+      titleLabel.append(titleLabelText, titleInput);
+
+      const titleRow = document.createElement("div");
+      titleRow.className = "edit-form-row";
+      titleRow.append(titleLabel);
 
       const speedLabel = document.createElement("label");
-      speedLabel.textContent = "Playback speed";
+      speedLabel.style.display = "flex";
+      speedLabel.style.flexDirection = "column";
+      speedLabel.style.gap = "4px";
+      const speedLabelText = document.createElement("span");
+      speedLabelText.textContent = "Playback speed";
       const speedSelect = document.createElement("select");
       const currentRate = v.playbackRate || 1;
       for (const s of SPEEDS) {
@@ -1159,7 +1263,7 @@
         if (s === currentRate) opt.selected = true;
         speedSelect.appendChild(opt);
       }
-      speedLabel.appendChild(speedSelect);
+      speedLabel.append(speedLabelText, speedSelect);
 
       const volumeLabel = document.createElement("label");
       volumeLabel.style.display = "flex";
@@ -1177,6 +1281,10 @@
         volumeLabelText.textContent = `Volume — ${volumeInput.value}%`;
       });
       volumeLabel.append(volumeLabelText, volumeInput);
+
+      const speedVolumeRow = document.createElement("div");
+      speedVolumeRow.className = "edit-form-row";
+      speedVolumeRow.append(speedLabel, volumeLabel);
 
       const timeRow = document.createElement("div");
       timeRow.className = "edit-form-row";
@@ -1216,7 +1324,7 @@
       cancelBtn.addEventListener("click", () => { editingId = null; render(); });
 
       actions.append(saveBtn, cancelBtn);
-      form.append(titleLabel, speedLabel, timeRow, volumeLabel, errorEl, actions);
+      form.append(titleRow, speedVolumeRow, timeRow, errorEl, actions);
 
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -1261,6 +1369,18 @@
           try { jamPlayer.setVolume(newVolume); } catch (_) {}
           jamVolumeSlider.value = String(newVolume);
           jamVolumeValue.textContent = `${newVolume}%`;
+          const queueIdx = jamQueue.findIndex((x) => x.id === v.id);
+          if (queueIdx !== -1) {
+            jamQueue[queueIdx] = {
+              ...jamQueue[queueIdx],
+              title: newTitle,
+              playbackRate: newRate,
+              volume: newVolume,
+              startSeconds: startSec,
+              endSeconds: endSec,
+            };
+          }
+          playerNowPlaying.textContent = newTitle;
         }
         editingId = null;
         render();
@@ -1309,6 +1429,8 @@
       playerMount.appendChild(host);
 
       playerArea.hidden = false;
+      const initial = jamQueue[jamIndex];
+      if (initial) playerNowPlaying.textContent = initial.title;
       playerArea.scrollIntoView({ behavior: "smooth", block: "start" });
 
       stopJamPlayer();
@@ -1393,6 +1515,7 @@
       playerMount.replaceChildren();
       playerArea.hidden = true;
       playerNowPlaying.textContent = "Now jamming";
+      closeJamOverflow();
       updateNavButtons();
     }
 
